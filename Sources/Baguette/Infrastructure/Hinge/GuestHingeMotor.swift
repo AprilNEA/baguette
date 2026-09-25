@@ -3,7 +3,7 @@ import Foundation
 /// `HingeMotor` — and `DeviceKeys` — that keeps `HingeControl serve`
 /// running inside the guest (`xcrun simctl spawn <udid> <HingeControl>
 /// serve`) and writes each command to it: `sweep <from> <to> <ms>`,
-/// `orientation <name>`, `button <page> <usage> <ms>`.
+/// `button <page> <usage> <ms>`. Rotation uses a bounded one-shot child.
 ///
 /// The tool registers a HID service shaped like dtuhidd's `avpCustom`
 /// and dispatches the pose events Device Hub sends (see
@@ -22,6 +22,7 @@ final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
     private let subprocess: () -> any Subprocess
     private let tool: () -> String?
     private let xcrun: URL
+    private let turnTimeout: TimeInterval
     private let settle: (TimeInterval) -> Void
     private let lock = NSLock()
     private var child: (any Subprocess)?
@@ -47,13 +48,15 @@ final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
         subprocess: @escaping () -> any Subprocess = { HostSubprocess() },
         tool: @escaping () -> String? = { InjectedDylibInstaller.installIfNeeded(.hingeControl) },
         xcrun: URL = URL(fileURLWithPath: "/usr/bin/xcrun"),
-        settle: @escaping (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) }
+        settle: @escaping (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) },
+        turnTimeout: TimeInterval = 8
     ) {
         self.udid = udid
         self.subprocess = subprocess
         self.tool = tool
         self.xcrun = xcrun
         self.settle = settle
+        self.turnTimeout = turnTimeout
     }
 
     func fold(from: Double, to: Double, over duration: TimeInterval) throws {
@@ -67,14 +70,51 @@ final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
     }
 
     func turn(to orientation: DeviceOrientation) throws {
+        guard let tool = tool() else { throw HingeError.toolMissing }
         let name: String
         switch orientation {
         case .portrait: name = "portrait"
-        case .portraitUpsideDown: name = "portraitUpsideDown"
-        case .landscapeLeft: name = "landscapeLeft"
-        case .landscapeRight: name = "landscapeRight"
+        case .portraitUpsideDown: name = "pud"
+        case .landscapeLeft: name = "landscape-left"
+        case .landscapeRight: name = "landscape-right"
         }
-        try send("orientation \(name)")
+        // A CLI can exit immediately after this call. Wait for the one-shot
+        // helper to dispatch and finish instead of only writing to its pipe.
+        final class Completion: @unchecked Sendable {
+            let lock = NSLock()
+            let done = DispatchSemaphore(value: 0)
+            var status: Int32?
+            var diagnostic = false
+        }
+        let completion = Completion()
+        let child = subprocess()
+        try child.run(
+            executable: xcrun,
+            arguments: ["simctl", "spawn", udid, tool, "orientation", name],
+            onBytes: { bytes in
+                guard !bytes.isEmpty else { return }
+                completion.lock.lock()
+                completion.diagnostic = true
+                completion.lock.unlock()
+            },
+            onExit: { status in
+                completion.lock.lock()
+                completion.status = status
+                completion.lock.unlock()
+                completion.done.signal()
+            }
+        )
+        guard completion.done.wait(timeout: .now() + turnTimeout) == .success else {
+            child.kill()
+            throw HingeError.toolFailed(status: -1)
+        }
+        completion.lock.lock()
+        let status = completion.status ?? -1
+        let diagnostic = completion.diagnostic
+        completion.lock.unlock()
+        guard status == 0, !diagnostic else {
+            throw HingeError.toolFailed(status: status == 0 ? -1 : status)
+        }
     }
 
     /// One command line to the serving child, started if need be.

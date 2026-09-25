@@ -11,7 +11,7 @@ protocol HingeMotor: Sendable {
     /// change. Returns when the sweep has been delivered.
     func fold(from: Double, to: Double, over duration: TimeInterval) throws
 
-    /// Turn the device to an interface orientation through the same
+    /// Turn the device to a physical orientation through the same
     /// channel Device Hub's rotate button uses.
     func turn(to orientation: DeviceOrientation) throws
 }

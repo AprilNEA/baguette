@@ -54,6 +54,26 @@ at the device's angle:
 {"type":"hinge","angleDegrees":130.0}
 ```
 
+## Rotation
+
+```bash
+baguette orientation --udid <UDID> portrait
+baguette orientation --udid <UDID> portrait-upside-down
+baguette orientation --udid <UDID> landscape-left
+baguette orientation --udid <UDID> landscape-right
+```
+
+Duo uses the guest pose channel for physical rotation; the legacy orientation
+message does not rotate it. Single-panel devices keep the legacy path. The
+public command and HTTP orientation route select the same backend. The app
+still controls its interface orientation, and the inner display's axes differ
+from the physical device's axes; command success establishes dispatch, not a
+particular app layout.
+
+Rotation waits for a one-shot guest command to complete, with an eight-second
+limit. Missing helpers, failed exits and emitted diagnostics report failure;
+there is no fallback to the ignored legacy event on a foldable.
+
 ## Hardware keys
 
 On iPhone Duo the legacy button press is ignored by SpringBoard, so

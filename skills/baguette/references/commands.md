@@ -423,7 +423,7 @@ baguette serve [--port <port>] [--host <host>] [--allowed-hosts <allowed-hosts> 
 
 ## baguette orientation
 
-Set the booted simulator's interface orientation
+Set the booted simulator's orientation
 
 ```
 baguette orientation --udid <udid> <value>

@@ -49,7 +49,7 @@ built and staged by the same loop — which `GuestHingeMotor` starts once
 per device with `xcrun simctl spawn <udid> <HingeControl> serve` and
 keeps: it registers a service of the same shape and plays each line it
 is written on stdin (`sweep <from> <to> <ms>` at 60 Hz with Device
-Hub's ease-out, `angle <deg>`, `orientation <name>`). The encoder
+Hub's ease-out, `angle <deg>`, `orientation <native-value>`). The encoder
 reproduces Device Hub's payload byte for byte. Sweeps queue behind one
 another; a pose costs no spawn after the first (~0.9 s round trip for
 Device Hub's 0.8 s sweep). `SharedHinge.fold(to:over:)` starts each
@@ -65,12 +65,17 @@ target. To inspect such events again, a guest HID monitor is
 `IOHIDEventGetDataValue` with field base `1<<16`.
 
 `orientation-picker-control` is Device Hub's rotate button by the same
-route (`HingeMotor.turn(to:)`); the page's rotate button still sends
-the Purple orientation event, which the guest honours or not per app.
-The page's rotate button turns the book (`InterfaceRoll`) and tells the
-guest; nothing reads the guest's orientation back (`simctl io
-enumerate` says `Ambiguous` for a dark or turning panel; backboardd's
-`OrientationDevice` log has it, unused).
+route (`HingeMotor.turn(to:)`). Its native values are `portrait`, `pud`,
+`landscape-left`, and `landscape-right`; camel-case names such as
+`landscapeLeft` are silently ignored. The public CLI and HTTP route detect
+multiple integrated panels and use this guest route; single-panel devices
+retain the Purple event. Rotation uses a bounded one-shot helper invocation
+so a short-lived CLI cannot exit before its queued input is processed.
+
+Duo 27.1 probes using public `UIDevice.orientation` confirmed all four physical
+values at hinge angles 0°, 130° and 180°. The app's interface orientation can
+differ or remain locked; this setter does not read it back. The browser's
+model roll remains a presentation transform, not independent sensor evidence.
 
 ## Reading the hinge back
 

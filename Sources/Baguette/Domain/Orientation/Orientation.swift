@@ -1,22 +1,13 @@
 import Foundation
 import Mockable
 
-/// The booted simulator's interface-orientation surface. Setting the
-/// orientation fires a GSEvent through the simulator's
-/// `PurpleWorkspacePort` so the iOS guest sees
-/// `UIDeviceOrientationDidChange` and rotates the UIKit world.
-///
-/// Write-only on purpose: GraphicsServices doesn't vend a "what's
-/// my current orientation" probe to outside processes — the host
-/// drives state, the guest reads the latest event.
+/// Drive a booted simulator's orientation. Foldables use a guest pose event;
+/// ordinary devices use the legacy GraphicsServices event. The foreground app
+/// still chooses its interface orientation, which can differ from device pose.
 @Mockable
 protocol Orientation: Sendable {
-    /// Apply `orientation` to the booted simulator. Returns `false`
-    /// when the GSEvent could not be delivered (port not vended, or
-    /// `mach_msg_send` rejected the message). The guest may further
-    /// reject the rotation if the foreground app declares
-    /// `UISupportedInterfaceOrientations` excluding it; that's a
-    /// guest-side decision and shows up as the visual frame staying
-    /// put. No way to detect that from here.
+    /// Returns whether dispatch succeeded, not whether the app rotated.
+    /// Foldable dispatch waits for its helper to finish and reports helper
+    /// failure; legacy dispatch reports whether the event port accepted it.
     func set(_ orientation: DeviceOrientation) -> Bool
 }

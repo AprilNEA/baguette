@@ -60,9 +60,8 @@ protocol Simulator: Sendable {
     /// supported (each spawns its own `/usr/bin/log stream` child).
     func logs() -> any LogStream
 
-    /// Drive this simulator's interface orientation. Each call
-    /// returns a fresh handle; the underlying GSEvent dispatch is
-    /// stateless.
+    /// Drive simulator orientation through the appropriate device channel.
+    /// Foldables use the guest pose helper; other devices use GSEvent.
     func orientation() -> any Orientation
 
     /// Override this simulator's status bar (time, carrier, network,

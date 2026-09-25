@@ -13,13 +13,14 @@ struct GuestHingeMotorTests {
 
     final class Captures: @unchecked Sendable {
         var runs: [[String]] = []
+        var killed = false
         var executable: URL?
         var written: [String] = []
         var settled: [TimeInterval] = []
         var onExit: (@Sendable (Int32) -> Void)?
     }
 
-    private func make(tool: String? = "/tmp/builds/abc/HingeControl", spawnFails: Bool = false)
+    private func make(tool: String? = "/tmp/builds/abc/HingeControl", spawnFails: Bool = false, exitStatus: Int32? = 0, diagnostic: String? = nil)
         -> (GuestHingeMotor, Captures) {
         let sub = MockSubprocess()
         let captures = Captures()
@@ -30,12 +31,21 @@ struct GuestHingeMotorTests {
                 captures.runs.append(args)
                 captures.onExit = onExit
             }
+        given(sub).run(executable: .any, arguments: .any, onBytes: .any, onExit: .any)
+            .willProduce { exe, args, onBytes, onExit in
+                if spawnFails { throw HingeError.toolFailed(status: 1) }
+                captures.executable = exe
+                captures.runs.append(args)
+                if let diagnostic { onBytes(Data(diagnostic.utf8)) }
+                if let exitStatus { onExit(exitStatus) }
+            }
+        given(sub).kill().willProduce { captures.killed = true }
         given(sub).write(.any).willProduce { data in
             captures.written.append(String(decoding: data, as: UTF8.self))
         }
         given(sub).terminate().willReturn()
         let motor = GuestHingeMotor(
-            udid: "duo", subprocess: { sub }, tool: { tool }, settle: { captures.settled.append($0) })
+            udid: "duo", subprocess: { sub }, tool: { tool }, settle: { captures.settled.append($0) }, turnTimeout: 0.05)
         return (motor, captures)
     }
 
@@ -58,10 +68,34 @@ struct GuestHingeMotorTests {
         #expect(captures.settled == [0.15, 0.3, 1.55])
     }
 
-    @Test func `turning the guest is written the same way`() throws {
+    @Test(arguments: [
+        (DeviceOrientation.portrait, "portrait"),
+        (.portraitUpsideDown, "pud"),
+        (.landscapeLeft, "landscape-left"),
+        (.landscapeRight, "landscape-right"),
+    ])
+    func `rotation uses the native physical orientation values and completes the guest command`(
+        orientation: DeviceOrientation, native: String
+    ) throws {
         let (motor, captures) = make()
-        try motor.turn(to: .landscapeLeft)
-        #expect(captures.written == ["orientation landscapeLeft\n"])
+        try motor.turn(to: orientation)
+        #expect(captures.runs == [["simctl", "spawn", "duo", "/tmp/builds/abc/HingeControl", "orientation", native]])
+        #expect(captures.written.isEmpty)
+    }
+
+    @Test func `a rejected rotation or helper diagnostic is not success`() {
+        let (failed, _) = make(exitStatus: 7)
+        #expect(throws: HingeError.toolFailed(status: 7)) { try failed.turn(to: .portrait) }
+        let (diagnostic, _) = make(diagnostic: "dispatch failed\n")
+        #expect(throws: HingeError.toolFailed(status: -1)) { try diagnostic.turn(to: .portrait) }
+        let (missing, _) = make(tool: nil)
+        #expect(throws: HingeError.toolMissing) { try missing.turn(to: .portrait) }
+    }
+
+    @Test func `a rotation that never completes is bounded and its child is killed`() {
+        let (motor, captures) = make(exitStatus: nil)
+        #expect(throws: HingeError.toolFailed(status: -1)) { try motor.turn(to: .portrait) }
+        #expect(captures.killed)
     }
 
     @Test func `a tool that went away is started again for the next sweep`() throws {

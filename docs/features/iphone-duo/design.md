@@ -192,7 +192,7 @@ whatever the interface orientation. The book *stands* the way the page turns it:
 the rotate button rolls the model a quarter turn per step of the interface cycle
 (`InterfaceRoll`, measured against Device Hub: the unfolded panel in *Portrait
 Upside Down* stands the book with its left half up), as it turns a phone's flat
-chrome, and tells the guest the orientation it asked for. Nothing reads the
+chrome, and tells the guest the orientation it asked for. The orientation setter does not read the
 guest's orientation back: `simctl io enumerate` says `Ambiguous` for a dark or
 turning panel, and backboardd's `OrientationDevice` log has it but is unused. A
 rotation made in Device Hub is its own, and the page's button brings the two

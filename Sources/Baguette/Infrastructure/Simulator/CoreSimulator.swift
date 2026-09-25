@@ -144,7 +144,15 @@ final class CoreSimulator: Simulator, @unchecked Sendable {
     }
 
     func orientation() -> any Orientation {
-        PurpleEventOrientation(udid: udid, host: host)
+        SimulatorOrientation(
+            isFoldable: { [udid, host] in
+                guard let ports = try? SimulatorKitFramebufferPorts.sizedPorts(udid: udid, host: host)
+                else { return false }
+                return IntegratedPanels.several(in: ports)
+            },
+            motor: GuestHingeMotor.forDevice(udid),
+            standard: PurpleEventOrientation(udid: udid, host: host)
+        )
     }
 
     func statusBar() -> any StatusBar {
