@@ -83,18 +83,21 @@ struct GuestHingeMotorTests {
         #expect(captures.written.isEmpty)
     }
 
-    @Test func `a rejected rotation or helper diagnostic is not success`() {
+    @Test func `a rejected rotation or missing helper is not success`() {
         let (failed, _) = make(exitStatus: 7)
         #expect(throws: HingeError.toolFailed(status: 7)) { try failed.turn(to: .portrait) }
-        let (diagnostic, _) = make(diagnostic: "dispatch failed\n")
-        #expect(throws: HingeError.toolFailed(status: -1)) { try diagnostic.turn(to: .portrait) }
         let (missing, _) = make(tool: nil)
         #expect(throws: HingeError.toolMissing) { try missing.turn(to: .portrait) }
     }
 
+    @Test func `successful rotation tolerates benign helper output`() throws {
+        let (motor, _) = make(diagnostic: "runtime warning\n")
+        try motor.turn(to: .landscapeLeft)
+    }
+
     @Test func `a rotation that never completes is bounded and its child is killed`() {
         let (motor, captures) = make(exitStatus: nil)
-        #expect(throws: HingeError.toolFailed(status: -1)) { try motor.turn(to: .portrait) }
+        #expect(throws: HingeError.toolTimedOut) { try motor.turn(to: .portrait) }
         #expect(captures.killed)
     }
 

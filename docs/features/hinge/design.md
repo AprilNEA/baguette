@@ -49,7 +49,8 @@ built and staged by the same loop — which `GuestHingeMotor` starts once
 per device with `xcrun simctl spawn <udid> <HingeControl> serve` and
 keeps: it registers a service of the same shape and plays each line it
 is written on stdin (`sweep <from> <to> <ms>` at 60 Hz with Device
-Hub's ease-out, `angle <deg>`, `orientation <native-value>`). The encoder
+Hub's ease-out, `angle <deg>`, `orientation <native-value>`). The public
+rotation command uses the same helper in one-shot mode instead. The encoder
 reproduces Device Hub's payload byte for byte. Sweeps queue behind one
 another; a pose costs no spawn after the first (~0.9 s round trip for
 Device Hub's 0.8 s sweep). `SharedHinge.fold(to:over:)` starts each
@@ -72,10 +73,16 @@ multiple integrated panels and use this guest route; single-panel devices
 retain the Purple event. Rotation uses a bounded one-shot helper invocation
 so a short-lived CLI cannot exit before its queued input is processed.
 
-Duo 27.1 probes using public `UIDevice.orientation` confirmed all four physical
-values at hinge angles 0°, 130° and 180°. The app's interface orientation can
-differ or remain locked; this setter does not read it back. The browser's
-model roll remains a presentation transform, not independent sensor evidence.
+The one-shot helper validates its native orientation values and exits with
+status 2 for invalid arguments or 1 for a rejected HID dispatch. The host
+waits up to eight seconds, then kills a stalled child and reports a timeout.
+Diagnostic output alone is not failure. Failure to read the device's panel
+configuration is also an error; it must not select the legacy path by default.
+
+Physical orientation can differ from an app's interface orientation. The
+browser's model roll is a separate presentation transform. Rotation can run
+while a hinge sweep is in progress; callers that need a specific sequence
+must wait for each operation before starting the next.
 
 ## Reading the hinge back
 

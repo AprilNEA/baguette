@@ -5,6 +5,14 @@ import Testing
 
 @Suite("SimulatorOrientation")
 struct SimulatorOrientationTests {
+    @Test func `unknown panel configuration cannot fall back to a misleading success`() {
+        let orientation = SimulatorOrientation(
+            isFoldable: { throw HingeError.toolMissing },
+            motor: MockHingeMotor(), standard: MockOrientation()
+        )
+        #expect(!orientation.set(.portrait))
+    }
+
     @Test(arguments: DeviceOrientation.allCases)
     func `foldable rotation uses the device hinge channel`(_ target: DeviceOrientation) {
         let motor = MockHingeMotor()

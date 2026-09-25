@@ -205,8 +205,7 @@ struct Server: Sendable {
             return Self.lifecycle(udid: Self.udidParam(r), simulators: simulators) { try $0.shutdown() }
         }
         // Orientation — `?value=portrait|landscape-left|landscape-right|portrait-upside-down`.
-        // Routes through `simulator.orientation().set(...)` which fires
-        // a GSEvent over `PurpleWorkspacePort`. Pure parse + dispatch
+        // Uses the device's orientation backend. Parse and dispatch
         // logic lives in `Server.applyOrientation` for unit testing.
         router.post("/simulators/:udid/orientation") { [simulators] r, _ in
             if let rejected = rejectUntrustedBrowser(r) { return rejected }
@@ -225,7 +224,7 @@ struct Server: Sendable {
                 return errorJSON("unknown udid: \(Self.udidParam(r))", status: .notFound)
             case .dispatchFailed:
                 return errorJSON(
-                    "orientation change failed (PurpleWorkspacePort unreachable?)",
+                    "orientation change failed (device configuration, event port or guest pose helper unavailable)",
                     status: .internalServerError
                 )
             }

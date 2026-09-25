@@ -84,19 +84,13 @@ final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
             let lock = NSLock()
             let done = DispatchSemaphore(value: 0)
             var status: Int32?
-            var diagnostic = false
         }
         let completion = Completion()
         let child = subprocess()
         try child.run(
             executable: xcrun,
             arguments: ["simctl", "spawn", udid, tool, "orientation", name],
-            onBytes: { bytes in
-                guard !bytes.isEmpty else { return }
-                completion.lock.lock()
-                completion.diagnostic = true
-                completion.lock.unlock()
-            },
+            onBytes: { _ in },
             onExit: { status in
                 completion.lock.lock()
                 completion.status = status
@@ -106,14 +100,13 @@ final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
         )
         guard completion.done.wait(timeout: .now() + turnTimeout) == .success else {
             child.kill()
-            throw HingeError.toolFailed(status: -1)
+            throw HingeError.toolTimedOut
         }
         completion.lock.lock()
         let status = completion.status ?? -1
-        let diagnostic = completion.diagnostic
         completion.lock.unlock()
-        guard status == 0, !diagnostic else {
-            throw HingeError.toolFailed(status: status == 0 ? -1 : status)
+        guard status == 0 else {
+            throw HingeError.toolFailed(status: status)
         }
     }
 

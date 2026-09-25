@@ -1941,7 +1941,7 @@
     // which iPhone UIKit ignores), 4 on iPad. POSTs the new value
     // through the `/simulators/<udid>/orientation?value=...` route;
     // server delegates to `simulator.orientation().set(...)`, which
-    // fires a GSEvent over PurpleWorkspacePort.
+    // dispatches a device orientation change through the appropriate backend.
     window.__nativeRotate = () => {
       const cycle = orientationCycle();
       orientationIndex = (orientationIndex + 1) % cycle.length;

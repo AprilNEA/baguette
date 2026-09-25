@@ -32,12 +32,13 @@
 //
 //   HingeControl angle <degrees>
 //   HingeControl sweep <from> <to> <milliseconds>     (60 Hz, ease-out)
-//   HingeControl orientation <portrait|landscapeLeft|landscapeRight|portraitUpsideDown>
+//   HingeControl orientation <portrait|pud|landscape-left|landscape-right>
 //   HingeControl button <usagePage> <usage> <milliseconds>
 //   HingeControl serve        — the same verbs, one per line on stdin,
 //                               until EOF; baguette keeps one of these
 //                               per device so a pose costs no spawn.
 #import <Foundation/Foundation.h>
+#import "HingeOrientation.h"
 #import <dlfcn.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -106,7 +107,12 @@ static NSData *orientationPayload(const char *value) {
 
 int main(int argc, char **argv) {
   @autoreleasepool {
-    if (argc < 2) { fprintf(stderr, "usage: HingeControl angle <deg> | sweep <from> <to> <ms> | orientation <portrait|landscapeLeft|landscapeRight|portraitUpsideDown> | button <page> <usage> <ms>\n"); return 2; }
+    if (argc < 2) { fprintf(stderr, "usage: HingeControl angle <deg> | sweep <from> <to> <ms> | orientation <portrait|pud|landscape-left|landscape-right> | button <page> <usage> <ms>\n"); return 2; }
+    if (strcmp(argv[1], "orientation") == 0 &&
+        (argc != 3 || !isHingeOrientation(@(argv[2])))) {
+      fprintf(stderr, "orientation requires portrait, pud, landscape-left or landscape-right\n");
+      return 2;
+    }
     dlopen("/System/Library/PrivateFrameworks/HID.framework/HID", RTLD_NOW);
     void *iokit = dlopen("/System/Library/Frameworks/IOKit.framework/IOKit", RTLD_NOW);
     IOHIDEventCreateVendorDefinedEvent = dlsym(iokit, "IOHIDEventCreateVendorDefinedEvent");
@@ -140,48 +146,52 @@ int main(int argc, char **argv) {
 
     BOOL (*dispatch)(id, SEL, id) = (BOOL (*)(id, SEL, id))objc_msgSend;
     // One key, down then up, as Device Hub's buttons press it.
-    void (^press)(unsigned, unsigned, unsigned) = ^(unsigned page, unsigned usage, unsigned ms) {
+    BOOL (^press)(unsigned, unsigned, unsigned) = ^BOOL(unsigned page, unsigned usage, unsigned ms) {
       IOHIDEventRef down = IOHIDEventCreateKeyboardEvent(kCFAllocatorDefault, mach_absolute_time(), page, usage, true, 0);
-      if (!dispatch(buttons, sel_registerName("dispatchEvent:"), (__bridge id)down)) fprintf(stderr, "dispatch failed\n");
+      BOOL downOK = dispatch(buttons, sel_registerName("dispatchEvent:"), (__bridge id)down);
       CFRelease(down);
       usleep(ms * 1000);
       IOHIDEventRef up = IOHIDEventCreateKeyboardEvent(kCFAllocatorDefault, mach_absolute_time(), page, usage, false, 0);
-      if (!dispatch(buttons, sel_registerName("dispatchEvent:"), (__bridge id)up)) fprintf(stderr, "dispatch failed\n");
+      BOOL upOK = dispatch(buttons, sel_registerName("dispatchEvent:"), (__bridge id)up);
       CFRelease(up);
+      return downOK && upOK;
     };
-    void (^send)(NSData *) = ^(NSData *payload) {
+    BOOL (^send)(NSData *) = ^BOOL(NSData *payload) {
       IOHIDEventRef ev = IOHIDEventCreateVendorDefinedEvent(kCFAllocatorDefault, mach_absolute_time(), 0xFF61, 0x5B, 0,
         (uint8_t *)payload.bytes, payload.length, 0);
       BOOL ok = dispatch(service, sel_registerName("dispatchEvent:"), (__bridge id)ev);
-      if (!ok) fprintf(stderr, "dispatch failed\n");
       CFRelease(ev);
+      return ok;
     };
     // One command: `angle D`, `sweep F T MS`, `orientation NAME` or `button P U MS`.
-    // Returns NO for a line it does not understand.
-    BOOL (^perform)(NSArray<NSString *> *) = ^BOOL(NSArray<NSString *> *words) {
+    // Exit status: 0 success, 1 dispatch failure, 2 invalid arguments.
+    int (^perform)(NSArray<NSString *> *) = ^int(NSArray<NSString *> *words) {
       NSString *verb = words.firstObject ?: @"";
       if ([verb isEqualToString:@"angle"] && words.count >= 2) {
-        send(hingePayload(words[1].doubleValue));
+        return send(hingePayload(words[1].doubleValue)) ? 0 : 1;
       } else if ([verb isEqualToString:@"sweep"] && words.count >= 4) {
         double from = words[1].doubleValue, to = words[2].doubleValue, ms = words[3].doubleValue;
         int frames = (int)(ms / 16.667); if (frames < 1) frames = 1;
         for (int i = 1; i <= frames; i++) {
           double p = (double)i / frames, e = 1 - pow(1 - p, 3);
-          send(hingePayload(from + (to - from) * e));
+          if (!send(hingePayload(from + (to - from) * e))) return 1;
           usleep(16667);
         }
-      } else if ([verb isEqualToString:@"orientation"] && words.count >= 2) {
-        send(orientationPayload(words[1].UTF8String));
+      } else if ([verb isEqualToString:@"orientation"] && words.count == 2) {
+        return dispatchHingeOrientation(words[1], ^BOOL(const char *value) {
+          return send(orientationPayload(value));
+        });
       } else if ([verb isEqualToString:@"button"] && words.count >= 4) {
-        press((unsigned)strtoul(words[1].UTF8String, NULL, 0), (unsigned)strtoul(words[2].UTF8String, NULL, 0),
-              (unsigned)strtoul(words[3].UTF8String, NULL, 0));
+        return press((unsigned)strtoul(words[1].UTF8String, NULL, 0), (unsigned)strtoul(words[2].UTF8String, NULL, 0),
+              (unsigned)strtoul(words[3].UTF8String, NULL, 0)) ? 0 : 1;
       } else {
-        return NO;
+        return 2;
       }
-      return YES;
+      return 0;
     };
     NSMutableArray<NSString *> *words = [NSMutableArray array];
     for (int i = 1; i < argc; i++) [words addObject:[NSString stringWithUTF8String:argv[i]]];
+    int status = 0;
     if ([words.firstObject isEqualToString:@"serve"]) {
       // Commands line by line until stdin closes — the owner's exit.
       char *line = NULL; size_t cap = 0; ssize_t n;
@@ -189,16 +199,21 @@ int main(int argc, char **argv) {
         NSString *text = [[NSString stringWithUTF8String:line]
           stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         NSArray<NSString *> *parts = [text componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-        if (text.length && !perform(parts)) fprintf(stderr, "bad line: %s\n", text.UTF8String);
+        if (text.length) {
+          int result = perform(parts);
+          if (result) fprintf(stderr, "%s: %s\n", result == 2 ? "bad line" : "dispatch failed", text.UTF8String);
+        }
       }
       free(line);
-    } else if (!perform(words)) {
-      fprintf(stderr, "bad arguments\n"); return 2;
+    } else {
+      status = perform(words);
+      if (status) fprintf(stderr, "%s\n", status == 2 ? "bad arguments" : "dispatch failed");
     }
     usleep(300 * 1000);
     ((void (*)(id, SEL))objc_msgSend)(service, sel_registerName("cancel"));
     ((void (*)(id, SEL))objc_msgSend)(buttons, sel_registerName("cancel"));
     usleep(100 * 1000);
+    return status;
   }
   return 0;
 }

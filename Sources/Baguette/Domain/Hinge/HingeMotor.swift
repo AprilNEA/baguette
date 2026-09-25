@@ -20,4 +20,5 @@ enum HingeError: Error, Equatable {
     /// The build did not ship `HingeControl`, or it could not be installed.
     case toolMissing
     case toolFailed(status: Int32)
+    case toolTimedOut
 }

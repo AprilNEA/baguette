@@ -63,16 +63,12 @@ baguette orientation --udid <UDID> landscape-left
 baguette orientation --udid <UDID> landscape-right
 ```
 
-Duo uses the guest pose channel for physical rotation; the legacy orientation
-message does not rotate it. Single-panel devices keep the legacy path. The
-public command and HTTP orientation route select the same backend. The app
-still controls its interface orientation, and the inner display's axes differ
-from the physical device's axes; command success establishes dispatch, not a
-particular app layout.
-
-Rotation waits for a one-shot guest command to complete, with an eight-second
-limit. Missing helpers, failed exits and emitted diagnostics report failure;
-there is no fallback to the ignored legacy event on a foldable.
+The command and HTTP orientation route rotate the physical device. An app
+can keep its interface locked, and the inner display has different axes
+from the device, so successful dispatch need not change the app's layout.
+The command reports failure when the device cannot be identified or its
+orientation event cannot be delivered. See [design.md](design.md) for the
+Duo-specific dispatch and completion behavior.
 
 ## Hardware keys
 
