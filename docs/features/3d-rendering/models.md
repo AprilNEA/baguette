@@ -143,6 +143,24 @@ and the scene rolls the model to stand that way (`InterfaceRoll`);
 reports the `pose` shown;
 `set_3d_camera` may also name an `orientation` outright.
 
+## Offline folded screenshots
+
+A saved capture can be rendered without contacting a simulator:
+
+```bash
+baguette render-3d --screen inner-landscape.png --device iphone-duo \
+  --hinge-degrees 130 --screen-rotation 90 --output folded.png
+```
+
+The fold angle runs from 0 (closed) to 180 (open). Below 90 degrees the
+capture is placed on the cover; otherwise it goes on the inner display.
+Supply a capture of that panel. This explicit pose does not infer simulator
+state or reproduce hinge hysteresis.
+
+`--screen-rotation` turns the saved image counterclockwise in quarter turns;
+`--rotation` independently turns the whole model. Omitting both new flags
+preserves the existing rendering behavior.
+
 ## Variants
 
 Variants use one public set/choice vocabulary with two definition strategies:

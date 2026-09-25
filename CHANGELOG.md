@@ -13,6 +13,9 @@ For releases prior to this changelog, see the
 ### Fixed
 - `baguette stream --help` no longer offers an `h264` format it rejects, and `baguette logs --help` lists the levels (`default`, `info`, `debug`) and styles (including `ndjson`) it actually accepts.
 
+### Added
+- `baguette render-3d --screen` accepts `--hinge-degrees` and `--screen-rotation` to place saved screenshots on the active foldable panel with the requested fold and image orientation. [Offline folded screenshots](docs/features/3d-rendering/models.md#offline-folded-screenshots).
+
 ### Changed
 - `CHANGELOG.md` now holds only the current minor; the 0.1.x history moved unchanged to `docs/changelog/0.1.md`.
 - Docs reorganised: a short README, one guide per feature under `docs/features/<name>/`, a generated command reference in `docs/commands.md`, and `docs/wire.md` for the gesture JSON. Several examples that never ran are fixed.

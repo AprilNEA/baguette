@@ -17,6 +17,12 @@ struct Render3DCommand: AsyncParsableCommand {
     @Option(help: "Installed 3D model definition ID")
     var device: String?
 
+    @Option(help: "Rotate the source texture counterclockwise by 0, 90, 180 or 270 degrees")
+    var screenRotation: Int = 0
+
+    @Option(help: "Offline fold angle, 0 through 180 degrees")
+    var hingeDegrees: Double?
+
     @Option(help: "Custom CoreSimulator device-set path")
     var deviceSet: String?
 
@@ -58,6 +64,12 @@ struct Render3DCommand: AsyncParsableCommand {
         }
         if screen != nil, device == nil {
             throw ValidationError("--device is required with --screen")
+        }
+        guard [0, 90, 180, 270].contains(screenRotation) else {
+            throw ValidationError("--screen-rotation must be 0, 90, 180 or 270")
+        }
+        if let hingeDegrees, !hingeDegrees.isFinite || !(0...180).contains(hingeDegrees) {
+            throw ValidationError("--hinge-degrees must be 0 through 180")
         }
         _ = try DeviceRenderArguments.rotation(rotation)
         if let size { _ = try DeviceRenderArguments.captureSize(size) }
@@ -127,7 +139,7 @@ struct Render3DCommand: AsyncParsableCommand {
                 : .color(background),
             screenGlass: screenGlass
         )
-        let png = try renderer.render(plan: plan, screenImage: screenImage)
+        let png = try renderer.render(plan: plan, screenImage: screenImage, hingeDegrees: hingeDegrees, screenRotation: screenRotation)
         if let output {
             try png.write(to: URL(fileURLWithPath: output), options: .atomic)
         } else {

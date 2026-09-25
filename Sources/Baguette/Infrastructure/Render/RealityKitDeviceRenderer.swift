@@ -13,14 +13,42 @@ struct RealityKitDeviceRenderer: DeviceRenderer, Sendable {
     }
 
     func render(plan: DeviceRenderPlan, screenImage: Data) throws -> Data {
+        try render(plan: plan, screenImage: screenImage, hingeDegrees: nil, screenRotation: 0)
+    }
+
+    func render(plan: DeviceRenderPlan, screenImage: Data, hingeDegrees: Double?, screenRotation: Int) throws -> Data {
         let scene = try RealityKitDeviceScene(plan: plan, assets: assets)
+        if let hingeDegrees { scene.update(hingeDegrees: hingeDegrees) }
         guard let source = CGImageSourceCreateWithData(screenImage as CFData, nil),
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
-              let surface = Self.surface(from: image) else {
+              let turned = Self.rotate(image, degrees: screenRotation),
+              let surface = Self.surface(from: turned) else {
             throw DeviceModelError.screenImageInvalid
         }
-        let rendered = try scene.render(screen: surface)
+        let rendered: IOSurface
+        if let hingeDegrees, HingeAngle(degrees: hingeDegrees).litPanel == .primary {
+            rendered = try scene.render(screens: FoldableScreens(unfolded: nil, cover: surface))
+        } else {
+            rendered = try scene.render(screen: surface)
+        }
         return try Self.png(from: rendered)
+    }
+
+    private static func rotate(_ image: CGImage, degrees: Int) -> CGImage? {
+        guard degrees != 0 else { return image }
+        let quarter = degrees == 90 || degrees == 270
+        let width = quarter ? image.height : image.width
+        let height = quarter ? image.width : image.height
+        guard let context = CGContext(data: nil, width: width, height: height,
+            bitsPerComponent: 8, bytesPerRow: 0,
+            space: image.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        context.translateBy(x: CGFloat(width)/2, y: CGFloat(height)/2)
+        context.rotate(by: CGFloat(degrees) * .pi / 180)
+        context.interpolationQuality = .none
+        context.draw(image, in: CGRect(x: -CGFloat(image.width)/2, y: -CGFloat(image.height)/2,
+            width: CGFloat(image.width), height: CGFloat(image.height)))
+        return context.makeImage()
     }
 
     private static func surface(from image: CGImage) -> IOSurface? {

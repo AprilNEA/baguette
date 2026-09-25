@@ -358,7 +358,7 @@ baguette record --udid <udid> --output <output> [--size <size>] [--fit <fit>] [-
 Render a simulator screen on an installed 3D device model
 
 ```
-baguette render-3d [--udid <udid>] [--screen <screen>] [--device <device>] [--variant <variant> …] [--rotation <rotation>] [--size <size>] [--fit <fit>] [--background <background>] [--screen-glass] [--output <output>]
+baguette render-3d [--udid <udid>] [--screen <screen>] [--device <device>] [--screen-rotation <screen-rotation>] [--hinge-degrees <hinge-degrees>] [--variant <variant> …] [--rotation <rotation>] [--size <size>] [--fit <fit>] [--background <background>] [--screen-glass] [--output <output>]
 ```
 
 | Flag | Required | Default | Description |
@@ -366,6 +366,8 @@ baguette render-3d [--udid <udid>] [--screen <screen>] [--device <device>] [--va
 | `--udid` |  |  | Simulator UDID to capture |
 | `--screen` |  |  | Existing PNG or JPEG screen image |
 | `--device` |  |  | Installed 3D model definition ID |
+| `--screen-rotation` |  | `0` | Rotate the source texture counterclockwise by 0, 90, 180 or 270 degrees |
+| `--hinge-degrees` |  |  | Offline fold angle, 0 through 180 degrees |
 | `--variant` |  |  | Model variant as SET=CHOICE (repeatable) |
 | `--rotation` |  | `0,0,0` | Device rotation as X,Y,Z degrees |
 | `--size` |  |  | Output size: WIDTHxHEIGHT, W:H, or one of: native \| appstore-6.9 \| appstore-6.5 \| appstore-ipad-13 \| square \| 16:9 \| 9:16 \| 4:3 \| 4:5 (defaults to the captured screen size) |
