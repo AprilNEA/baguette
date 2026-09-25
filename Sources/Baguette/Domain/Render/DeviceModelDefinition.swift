@@ -372,6 +372,8 @@ enum DeviceModelError: Error, Equatable {
     case unsupportedSchemaVersion(Int)
     case emptyField(String)
     case invalidTextureSize
+    case modelCannotFold(String)
+    case invalidHingeAngle
     case invalidFold
     case invalidTextureRotation(Int)
     case missingAsset

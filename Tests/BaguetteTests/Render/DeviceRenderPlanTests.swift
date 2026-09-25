@@ -5,6 +5,36 @@ import Testing
 @Suite("DeviceRenderPlan")
 struct DeviceRenderPlanTests {
 
+    @Test(arguments: [(0.0, IntegratedPanel.primary), (89.0, .primary), (90.0, .secondary), (130.0, .secondary), (180.0, .secondary)])
+    func `saved fold poses select the corresponding screen`(angle: Double, panel: IntegratedPanel) throws {
+        let plan = try Self.foldPlan(angle: angle)
+        #expect(plan.screenPanel == panel)
+        #expect(plan.hingeDegrees == angle)
+        #expect(plan.screenRotation == .quarter)
+    }
+
+    @Test(arguments: [-1.0, 181.0, Double.infinity, Double.nan])
+    func `render plans reject invalid fold angles`(angle: Double) {
+        #expect(throws: DeviceModelError.invalidHingeAngle) {
+            _ = try Self.foldPlan(angle: angle)
+        }
+    }
+
+    @Test func `an unspecified fold keeps the existing screen selection`() throws {
+        #expect(try Self.foldPlan(angle: nil).screenPanel == nil)
+    }
+
+    private static func foldPlan(angle: Double?) throws -> DeviceRenderPlan {
+        try DeviceRenderPlan.build(
+            model: installed(fold: DeviceModelFold(
+                clip: "fold", shutTime: 5, coverMaterial: "Cover",
+                coverTextureSize: RenderDimensions(width: 100, height: 200), openPoseDegrees: 130
+            )),
+            variants: [:], rotation: .zero, outputSize: RenderDimensions(width: 300, height: 400),
+            hingeDegrees: angle, screenRotation: .quarter
+        )
+    }
+
     @Test func `builds a render plan with mapped variants and requested camera`() throws {
         let model = Self.installed()
 
@@ -61,7 +91,7 @@ struct DeviceRenderPlanTests {
 }
 
 private extension DeviceRenderPlanTests {
-    static func installed() -> InstalledDeviceModel {
+    static func installed(fold: DeviceModelFold? = nil) -> InstalledDeviceModel {
         InstalledDeviceModel(
             definition: DeviceModelDefinition(
                 schemaVersion: 1,
@@ -75,7 +105,8 @@ private extension DeviceRenderPlanTests {
                     screenMaterial: "Screen",
                     nativeOrientation: .landscape,
                     textureSize: RenderDimensions(width: 3024, height: 1964),
-                    usesScreenOverlay: false
+                    usesScreenOverlay: false,
+                    fold: fold
                 ),
                 variantSets: [
                     DeviceVariantSet(

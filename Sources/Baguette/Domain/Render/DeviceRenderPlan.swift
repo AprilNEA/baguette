@@ -8,6 +8,15 @@ struct DeviceRotation: Equatable, Sendable, Codable {
     static let zero = DeviceRotation(x: 0, y: 0, z: 0)
 }
 
+enum ScreenRotation: Int, CaseIterable, Sendable {
+    case none = 0
+    case quarter = 90
+    case half = 180
+    case threeQuarters = 270
+
+    var swapsDimensions: Bool { self == .quarter || self == .threeQuarters }
+}
+
 enum DeviceScreenFit: String, Equatable, Sendable, Codable {
     case cover
     case contain
@@ -29,6 +38,12 @@ struct DeviceRenderPlan: Equatable, Sendable {
     /// Composite a reflective cover-glass layer over the screen. Off by
     /// default so automation screenshots stay pixel-stable.
     let screenGlass: Bool
+    let hingeDegrees: Double?
+    let screenRotation: ScreenRotation
+
+    var screenPanel: IntegratedPanel? {
+        hingeDegrees.map { HingeAngle(degrees: $0).litPanel }
+    }
 
     static func build(
         model: InstalledDeviceModel,
@@ -37,13 +52,23 @@ struct DeviceRenderPlan: Equatable, Sendable {
         outputSize: RenderDimensions,
         fit: DeviceScreenFit = .cover,
         background: DeviceRenderBackground = .transparent,
-        screenGlass: Bool = false
+        screenGlass: Bool = false,
+        hingeDegrees: Double? = nil,
+        screenRotation: ScreenRotation = .none
     ) throws -> DeviceRenderPlan {
         guard outputSize.width > 0, outputSize.height > 0 else {
             throw DeviceModelError.invalidOutputSize
         }
         guard rotation.x.isFinite, rotation.y.isFinite, rotation.z.isFinite else {
             throw DeviceModelError.invalidRotation
+        }
+        if let hingeDegrees {
+            guard model.definition.scene.fold != nil else {
+                throw DeviceModelError.modelCannotFold(model.definition.id.rawValue)
+            }
+            guard hingeDegrees.isFinite, (0...180).contains(hingeDegrees) else {
+                throw DeviceModelError.invalidHingeAngle
+            }
         }
         if case .color(let color) = background {
             let pattern = #"^#[0-9A-Fa-f]{6}$"#
@@ -58,7 +83,9 @@ struct DeviceRenderPlan: Equatable, Sendable {
             outputSize: outputSize,
             fit: fit,
             background: background,
-            screenGlass: screenGlass
+            screenGlass: screenGlass,
+            hingeDegrees: hingeDegrees,
+            screenRotation: screenRotation
         )
     }
 }

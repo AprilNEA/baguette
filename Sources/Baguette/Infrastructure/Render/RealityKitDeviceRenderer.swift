@@ -13,20 +13,15 @@ struct RealityKitDeviceRenderer: DeviceRenderer, Sendable {
     }
 
     func render(plan: DeviceRenderPlan, screenImage: Data) throws -> Data {
-        try render(plan: plan, screenImage: screenImage, hingeDegrees: nil, screenRotation: 0)
-    }
-
-    func render(plan: DeviceRenderPlan, screenImage: Data, hingeDegrees: Double?, screenRotation: Int) throws -> Data {
         let scene = try RealityKitDeviceScene(plan: plan, assets: assets)
-        if let hingeDegrees { scene.update(hingeDegrees: hingeDegrees) }
+        if let hingeDegrees = plan.hingeDegrees { scene.update(hingeDegrees: hingeDegrees) }
         guard let source = CGImageSourceCreateWithData(screenImage as CFData, nil),
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
-              let turned = Self.rotate(image, degrees: screenRotation),
-              let surface = Self.surface(from: turned) else {
+              let surface = Self.surface(from: image, rotation: plan.screenRotation) else {
             throw DeviceModelError.screenImageInvalid
         }
         let rendered: IOSurface
-        if let hingeDegrees, HingeAngle(degrees: hingeDegrees).litPanel == .primary {
+        if plan.screenPanel == .primary {
             rendered = try scene.render(screens: FoldableScreens(unfolded: nil, cover: surface))
         } else {
             rendered = try scene.render(screen: surface)
@@ -34,26 +29,9 @@ struct RealityKitDeviceRenderer: DeviceRenderer, Sendable {
         return try Self.png(from: rendered)
     }
 
-    private static func rotate(_ image: CGImage, degrees: Int) -> CGImage? {
-        guard degrees != 0 else { return image }
-        let quarter = degrees == 90 || degrees == 270
-        let width = quarter ? image.height : image.width
-        let height = quarter ? image.width : image.height
-        guard let context = CGContext(data: nil, width: width, height: height,
-            bitsPerComponent: 8, bytesPerRow: 0,
-            space: image.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-        context.translateBy(x: CGFloat(width)/2, y: CGFloat(height)/2)
-        context.rotate(by: CGFloat(degrees) * .pi / 180)
-        context.interpolationQuality = .none
-        context.draw(image, in: CGRect(x: -CGFloat(image.width)/2, y: -CGFloat(image.height)/2,
-            width: CGFloat(image.width), height: CGFloat(image.height)))
-        return context.makeImage()
-    }
-
-    private static func surface(from image: CGImage) -> IOSurface? {
-        let width = image.width
-        let height = image.height
+    static func surface(from image: CGImage, rotation: ScreenRotation = .none) -> IOSurface? {
+        let width = rotation.swapsDimensions ? image.height : image.width
+        let height = rotation.swapsDimensions ? image.width : image.height
         let bytesPerRow = ((width * 4 + 63) / 64) * 64
         guard let surface = IOSurfaceCreate([
             kIOSurfaceWidth: width,
@@ -75,7 +53,13 @@ struct RealityKitDeviceRenderer: DeviceRenderer, Sendable {
             bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
                 | CGBitmapInfo.byteOrder32Little.rawValue
         ) else { return nil }
-        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        context.translateBy(x: CGFloat(width) / 2, y: CGFloat(height) / 2)
+        context.rotate(by: CGFloat(rotation.rawValue) * .pi / 180)
+        context.interpolationQuality = .none
+        context.draw(image, in: CGRect(
+            x: -CGFloat(image.width) / 2, y: -CGFloat(image.height) / 2,
+            width: CGFloat(image.width), height: CGFloat(image.height)
+        ))
         return surface
     }
 
