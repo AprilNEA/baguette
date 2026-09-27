@@ -19,6 +19,9 @@ For releases prior to this changelog, see the
 - `CHANGELOG.md` now holds only the current minor; the 0.1.x history moved unchanged to `docs/changelog/0.1.md`.
 - Docs reorganised: a short README, one guide per feature under `docs/features/<name>/`, a generated command reference in `docs/commands.md`, and `docs/wire.md` for the gesture JSON. Several examples that never ran are fixed.
 
+### Added
+- `baguette screenshot --metadata-output` writes a JSON sidecar with the captured frame's actual pixel sizes and crop or letterbox placement. → [docs](docs/features/screenshot/geometry.md) ([#91](https://github.com/tddworks/baguette/pull/91))
+
 ---
 
 ## [0.2.0] - 2026-09-22
