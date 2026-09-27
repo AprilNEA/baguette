@@ -16,8 +16,8 @@ final class CoreSimulators: Simulators, DeviceHost, @unchecked Sendable {
 
     var all: [any Simulator] {
         guard let set = resolveSet() else { return [] }
-        return availableDevices(in: set).map { device in
-            coreSimulator(from: device)
+        return availableDevices(in: set.object).map { device in
+            coreSimulator(from: device, deviceSetPath: set.path)
         }
     }
 
@@ -31,7 +31,7 @@ final class CoreSimulators: Simulators, DeviceHost, @unchecked Sendable {
     /// Used by the Screen/Input adapters as well, hence `internal`.
     func resolveDevice(udid: String) -> NSObject? {
         guard let set = resolveSet() else { return nil }
-        for device in availableDevices(in: set) {
+        for device in availableDevices(in: set.object) {
             if (device.value(forKey: "UDID") as? NSUUID)?.uuidString == udid {
                 return device
             }
@@ -41,12 +41,12 @@ final class CoreSimulators: Simulators, DeviceHost, @unchecked Sendable {
 
     // MARK: - private
 
-    private func resolveSet() -> NSObject? {
+    private func resolveSet() -> (object: NSObject, path: String?)? {
         guard let ctx = sharedServiceContext() else { return nil }
         if let path = deviceSetPath {
-            return customDeviceSet(context: ctx, path: path) ?? defaultDeviceSet(context: ctx)
+            return customDeviceSet(context: ctx, path: path)
         }
-        return defaultDeviceSet(context: ctx)
+        return defaultDeviceSet(context: ctx).map { ($0, nil) }
     }
 
     private func sharedServiceContext() -> NSObject? {
@@ -65,15 +65,16 @@ final class CoreSimulators: Simulators, DeviceHost, @unchecked Sendable {
         return invokeObjWithError(context, sel, &err)
     }
 
-    private func customDeviceSet(context: NSObject, path: String) -> NSObject? {
+    private func customDeviceSet(context: NSObject, path: String) -> (object: NSObject, path: String?)? {
         let candidates = [path, (path as NSString).appendingPathComponent("Devices")]
         let withPathSel = NSSelectorFromString("deviceSetWithPath:error:")
         if context.responds(to: withPathSel) {
             for candidate in candidates where existsAsDirectory(candidate) {
                 var err: NSError?
                 if let set = invokeObjWithObjAndError(context, withPathSel, candidate as NSString, &err),
-                   hasDevices(set) {
-                    return set
+                    hasDevices(set)
+                {
+                    return (set, candidate)
                 }
             }
         }
@@ -84,7 +85,7 @@ final class CoreSimulators: Simulators, DeviceHost, @unchecked Sendable {
         (set.value(forKey: "availableDevices") as? [NSObject]) ?? []
     }
 
-    private func coreSimulator(from device: NSObject) -> CoreSimulator {
+    private func coreSimulator(from device: NSObject, deviceSetPath: String?) -> CoreSimulator {
         let udid = (device.value(forKey: "UDID") as? NSUUID)?.uuidString ?? ""
         let name = (device.value(forKey: "name") as? String) ?? "Unknown"
         let raw = (device.value(forKey: "state") as? NSNumber)?.uintValue ?? 1
@@ -92,15 +93,17 @@ final class CoreSimulators: Simulators, DeviceHost, @unchecked Sendable {
         // returns the user-facing version string ("iOS 26.4"). Fall
         // back to the runtime identifier and finally to "" so the
         // field is always at least a string.
-        let runtimeName = (device.value(forKey: "runtime") as? NSObject).flatMap { rt -> String? in
-            (rt.value(forKey: "name") as? String) ?? (rt.value(forKey: "versionString") as? String)
-        } ?? ""
+        let runtimeName =
+            (device.value(forKey: "runtime") as? NSObject).flatMap { rt -> String? in
+                (rt.value(forKey: "name") as? String) ?? (rt.value(forKey: "versionString") as? String)
+            } ?? ""
         // `deviceType.name` is the stable bundle filename — survives
         // `simctl clone` / rename, where `device.name` does not. Falls
         // back to the user-given `name` so non-clones (and any oddball
         // device with no `deviceType`) resolve to the same string they
         // did before.
-        let deviceTypeName = (device.value(forKey: "deviceType") as? NSObject)
+        let deviceTypeName =
+            (device.value(forKey: "deviceType") as? NSObject)
             .flatMap { $0.value(forKey: "name") as? String } ?? name
         return CoreSimulator(
             udid: udid,
@@ -108,7 +111,8 @@ final class CoreSimulators: Simulators, DeviceHost, @unchecked Sendable {
             state: state(from: raw),
             runtime: runtimeName,
             deviceTypeName: deviceTypeName,
-            host: self
+            host: self,
+            deviceSetPath: deviceSetPath
         )
     }
 
@@ -190,10 +194,11 @@ final class CoreSimulators: Simulators, DeviceHost, @unchecked Sendable {
         task.standardOutput = pipe
         do { try task.run() } catch { return nil }
         task.waitUntilExit()
-        let out = String(
-            data: pipe.fileHandleForReading.readDataToEndOfFile(),
-            encoding: .utf8
-        )?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let out =
+            String(
+                data: pipe.fileHandleForReading.readDataToEndOfFile(),
+                encoding: .utf8
+            )?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return out.isEmpty ? nil : out
     }
 
@@ -232,9 +237,10 @@ func invokeBoolWithError(
     _ target: NSObject, _ sel: Selector, _ err: inout NSError?
 ) -> Bool {
     guard let imp = class_getMethodImplementation(type(of: target), sel) else { return false }
-    typealias Fn = @convention(c) (
-        AnyObject, Selector, AutoreleasingUnsafeMutablePointer<NSError?>
-    ) -> Bool
+    typealias Fn =
+        @convention(c) (
+            AnyObject, Selector, AutoreleasingUnsafeMutablePointer<NSError?>
+        ) -> Bool
     return unsafeBitCast(imp, to: Fn.self)(target, sel, &err)
 }
 
@@ -242,9 +248,10 @@ func invokeBoolWithObjAndError(
     _ target: NSObject, _ sel: Selector, _ arg: AnyObject, _ err: inout NSError?
 ) -> Bool {
     guard let imp = class_getMethodImplementation(type(of: target), sel) else { return false }
-    typealias Fn = @convention(c) (
-        AnyObject, Selector, AnyObject, AutoreleasingUnsafeMutablePointer<NSError?>
-    ) -> Bool
+    typealias Fn =
+        @convention(c) (
+            AnyObject, Selector, AnyObject, AutoreleasingUnsafeMutablePointer<NSError?>
+        ) -> Bool
     return unsafeBitCast(imp, to: Fn.self)(target, sel, arg, &err)
 }
 
@@ -252,9 +259,10 @@ func invokeObjWithError(
     _ target: NSObject, _ sel: Selector, _ err: inout NSError?
 ) -> NSObject? {
     guard let imp = class_getMethodImplementation(type(of: target), sel) else { return nil }
-    typealias Fn = @convention(c) (
-        AnyObject, Selector, AutoreleasingUnsafeMutablePointer<NSError?>
-    ) -> AnyObject?
+    typealias Fn =
+        @convention(c) (
+            AnyObject, Selector, AutoreleasingUnsafeMutablePointer<NSError?>
+        ) -> AnyObject?
     return unsafeBitCast(imp, to: Fn.self)(target, sel, &err) as? NSObject
 }
 
@@ -262,9 +270,10 @@ func invokeObjWithObjAndError(
     _ target: NSObject, _ sel: Selector, _ arg: AnyObject, _ err: inout NSError?
 ) -> NSObject? {
     guard let imp = class_getMethodImplementation(type(of: target), sel) else { return nil }
-    typealias Fn = @convention(c) (
-        AnyObject, Selector, AnyObject, AutoreleasingUnsafeMutablePointer<NSError?>
-    ) -> AnyObject?
+    typealias Fn =
+        @convention(c) (
+            AnyObject, Selector, AnyObject, AutoreleasingUnsafeMutablePointer<NSError?>
+        ) -> AnyObject?
     return unsafeBitCast(imp, to: Fn.self)(target, sel, arg, &err) as? NSObject
 }
 
@@ -272,10 +281,11 @@ func invokeClassObjWithObjAndError(
     _ cls: AnyClass, _ sel: Selector, _ arg: AnyObject, _ err: inout NSError?
 ) -> NSObject? {
     guard let metaCls = object_getClass(cls),
-          let imp = class_getMethodImplementation(metaCls, sel)
+        let imp = class_getMethodImplementation(metaCls, sel)
     else { return nil }
-    typealias Fn = @convention(c) (
-        AnyClass, Selector, AnyObject, AutoreleasingUnsafeMutablePointer<NSError?>
-    ) -> AnyObject?
+    typealias Fn =
+        @convention(c) (
+            AnyClass, Selector, AnyObject, AutoreleasingUnsafeMutablePointer<NSError?>
+        ) -> AnyObject?
     return unsafeBitCast(imp, to: Fn.self)(cls, sel, arg, &err) as? NSObject
 }

@@ -11,12 +11,18 @@ For releases prior to this changelog, see the
 ## [Unreleased]
 
 ### Fixed
+- The AX inspector and `baguette describe-ui` tree hit tests can select descendants outside empty or smaller container frames. → [docs](docs/features/accessibility/README.md#gotchas) ([#89](https://github.com/tddworks/baguette/pull/89))
+- Input commands wait for HID transmission before reporting success or exiting; transmission errors and timeouts report failure. See [dispatch semantics](docs/features/touches/design.md#5-dispatch) ([#90](https://github.com/tddworks/baguette/pull/90)).
+- `--device-set` now reaches display enumeration; stalled probes time out and failed display resolution retains `simctl` diagnostics. → [docs](docs/features/companion-screens/README.md#gotchas) ([#92](https://github.com/tddworks/baguette/pull/92))
 - `baguette stream` no longer crashes on startup and now releases capture resources when stopped by Ctrl-C or SIGTERM.
 - `baguette stream --help` no longer offers an `h264` format it rejects, and `baguette logs --help` lists the levels (`default`, `info`, `debug`) and styles (including `ndjson`) it actually accepts.
 
 ### Changed
 - `CHANGELOG.md` now holds only the current minor; the 0.1.x history moved unchanged to `docs/changelog/0.1.md`.
 - Docs reorganised: a short README, one guide per feature under `docs/features/<name>/`, a generated command reference in `docs/commands.md`, and `docs/wire.md` for the gesture JSON. Several examples that never ran are fixed.
+
+### Added
+- `baguette screenshot --metadata-output` writes a JSON sidecar with the captured frame's actual pixel sizes and crop or letterbox placement. → [docs](docs/features/screenshot/geometry.md) ([#91](https://github.com/tddworks/baguette/pull/91))
 
 ---
 

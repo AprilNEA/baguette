@@ -126,6 +126,12 @@ closes; the pane shows the instructions plus the server's verbatim error
 
 ## Gotchas
 
+- **Display enumeration respects `--device-set`.** The resolved custom
+  directory is passed to `simctl`; an unavailable custom set does not select
+  the default set. Enumeration waits up to 5 seconds for process exit and
+  output, then requests termination and waits up to 1 more second. Throwing
+  display resolution retains the exit status and diagnostic output on failure;
+  availability probes keep their existing failure-handling behavior.
 - **Blank is usually not baguette.** iOS does not mirror the phone onto an
   external display — an app has to put a scene or window on it — so a freshly
   attached plain-resolution display is black, in Simulator.app's window as
