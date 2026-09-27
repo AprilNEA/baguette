@@ -11,6 +11,7 @@ For releases prior to this changelog, see the
 ## [Unreleased]
 
 ### Fixed
+- The AX inspector and `baguette describe-ui` tree hit tests can select descendants outside empty or smaller container frames. → [docs](docs/features/accessibility/README.md#gotchas) ([#89](https://github.com/tddworks/baguette/pull/89))
 - `baguette stream` no longer crashes on startup and now releases capture resources when stopped by Ctrl-C or SIGTERM.
 - `baguette stream --help` no longer offers an `h264` format it rejects, and `baguette logs --help` lists the levels (`default`, `info`, `debug`) and styles (including `ndjson`) it actually accepts.
 
