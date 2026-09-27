@@ -1,6 +1,7 @@
-import Testing
 import Foundation
 import Mockable
+import Testing
+
 @testable import Baguette
 
 /// Unit tests for `AXPTranslatorAccessibility`'s host-resolution
@@ -9,7 +10,7 @@ import Mockable
 ///
 /// The actual XPC round-trip into the simulator's accessibility
 /// service depends on private framework load + dispatcher install
-/// + `frontmostApplicationWithDisplayId:` returning a usable
+/// + guest frontmost discovery returning a PID with a usable
 /// translation. That path is integration-only — manually
 /// smoke-tested via `baguette describe-ui` against a booted sim.
 @Suite("AXPTranslatorAccessibility — error paths")

@@ -101,9 +101,10 @@ GET /simulators/<udid>/describe-ui.json?x=172&y=880
   AXP returns as `NSNumber` for `accessibilityValue` (sliders, page
   pickers) lands in JSON as a stringified number. JSON consumers
   that want to discriminate semantics should check `role`.
-- **One XPC handshake per call.** First call after process startup
-  pays a ~hundreds-of-ms warm-up while the AX connection comes up;
-  subsequent calls reuse it. No connection pool.
+- **Live foreground discovery per call.** The bundled guest helper queries
+  the window server before the host reads that process’s AX tree. A missing
+  helper or failed discovery is an explicit error; rebuild with `make` after
+  changing guest sources.
 - **Status bar and tab-bar items** come from a positional sweep on top
   of the walk, which costs ~1.5–2 s per full tree — see
   [the hit-test sweep](../ax-hit-test-sweep/README.md).

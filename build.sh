@@ -12,7 +12,7 @@ cd "$(dirname "$0")"
 
 # Pure-SPM build. Private frameworks resolve through the rpath flags +
 # linkedFramework declarations in Package.swift.
-swift build -c release
+swift build -c release "$@"
 
 # Drop the binary at the workspace root so the Makefile / install scripts
 # find it where they always have.

@@ -1,32 +1,16 @@
+import CoreGraphics
 import Foundation
 import ObjectiveC
-import CoreGraphics
 
 /// Production `Accessibility` — backed by `AXPTranslator` from the
 /// private `AccessibilityPlatformTranslation` framework.
 ///
-/// The non-trivial part is *bridge wiring*: out-of-Simulator.app,
-/// `AXPTranslator` won't talk to the in-simulator AX service unless
-/// we install a `bridgeTokenDelegate` that knows how to route an
-/// `AXPTranslatorRequest` to the right `SimDevice`'s
-/// `-sendAccessibilityRequestAsync:` XPC channel. Without that
-/// delegate, every `frontmostApplication…` call returns nil.
-///
-/// Recipe (per call):
-///
-///   1. Generate a fresh UUID token; register it → SimDevice in the
-///      shared dispatcher.
-///   2. Call `-frontmostApplicationWithDisplayId:bridgeDelegateToken:`.
-///      The translator stores the token internally and, on every XPC
-///      request, asks the dispatcher "what device for this token?".
-///   3. Set the same token as `bridgeDelegateToken` on the returned
-///      translation object — children inherit it, but the translator
-///      re-reads it for every sub-request, so missing this means
-///      child element reads silently fail.
-///   4. Convert translation → `AXPMacPlatformElement` and walk
-///      `accessibilityChildren`, propagating the token onto every
-///      sub-translation.
-///   5. Unregister on exit.
+/// Each call asks the guest window server for its current frontmost PID,
+/// then requests that application's translation directly from its SimDevice.
+/// This avoids the CoreSimulatorBridge frontmost query, which can return an
+/// empty response on iOS 26.5 even while process-scoped AX requests work.
+/// A fresh UUID routes all subsequent tree requests to the same device.
+/// The token is stamped on each translation before reading its children.
 ///
 /// Coordinates: AXP frames come back in **macOS host-window**
 /// coordinates. We project to device points using the simulator's
@@ -40,6 +24,7 @@ import CoreGraphics
 final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
     private let udid: String
     private let host: any DeviceHost
+    private let deviceSetPath: String?
 
     /// Cap on tree-walk recursion depth. Real iOS screens rarely
     /// exceed 20–30 levels; the cap prevents pathological cycles.
@@ -60,10 +45,12 @@ final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
     init(
         udid: String,
         host: any DeviceHost,
+        deviceSetPath: String? = nil,
         litPanelPointSize: @escaping @Sendable () -> CGSize? = { nil }
     ) {
         self.udid = udid
         self.host = host
+        self.deviceSetPath = deviceSetPath
         self.litPanelPointSize = litPanelPointSize
     }
 
@@ -95,7 +82,8 @@ final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
         // selector isn't available (very old AXPTranslator, hypothetical)
         // or the host-side resolution fails before we get a translator.
         if Self.supportsServerSideHitTest,
-           let hit = try hitTestServerSide(point: point) {
+            let hit = try hitTestServerSide(point: point)
+        {
             return hit
         }
         guard let tree = try fetchTree(hitTest: point) else { return nil }
@@ -119,13 +107,8 @@ final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
         let deadline: Date
     }
 
-    /// Run `body` inside a fully-prepared AXP context. Handles the
-    /// dispatcher token lifecycle (register on entry, unregister on
-    /// exit), translator + frontmost-app resolution, and the
-    /// host-coord ↔ device-point `AXFrameTransform` setup. Returns
-    /// `nil` if any setup step fails (framework not loaded, device
-    /// missing, frontmost app not resolvable, etc.) — same nil
-    /// semantics each entry point had pre-refactor.
+    /// Owns the token lifecycle and coordinate projection. Device/framework
+    /// absence returns nil; frontmost discovery and PID lookup errors propagate.
     private func withAXPContext<T>(
         _ body: (AXPContext) throws -> T?
     ) throws -> T? {
@@ -138,6 +121,12 @@ final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
             return nil
         }
 
+        let pid = try GuestFrontmost.pid(udid: udid, deviceSetPath: deviceSetPath)
+        let translation = try Self.sharedDispatcher.application(
+            pid: pid, on: device, udid: udid, timeout: Self.xpcTimeoutSeconds
+        )
+        // Discovery has its own bounded lifetime; do not spend the tree's
+        // deadline waiting for the guest helper or the root translation.
         let token = UUID().uuidString
         let deadline = Date().addingTimeInterval(Self.xpcTimeoutSeconds)
         Self.sharedDispatcher.register(device: device, token: token, deadline: deadline)
@@ -145,17 +134,13 @@ final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
 
         guard let translator = Self.sharedTranslator else { return nil }
 
-        guard let translation = Self.frontmostApplication(
-            translator: translator, token: token
-        ) else {
-            log("[ax] no frontmost application for udid=\(udid)")
-            return nil
-        }
         Self.stamp(token: token, on: translation)
 
-        guard let frontmostRoot = Self.macPlatformElement(
-            translator: translator, translation: translation
-        ) else {
+        guard
+            let frontmostRoot = Self.macPlatformElement(
+                translator: translator, translation: translation
+            )
+        else {
             log("[ax] no mac platform element from translation")
             return nil
         }
@@ -165,13 +150,14 @@ final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
         let rootFrame = AXElementReader.frame(of: frontmostRoot)
         let transform = AXFrameTransform(rootFrame: rootFrame, pointSize: pointSize)
 
-        return try body(AXPContext(
-            translator: translator,
-            token: token,
-            frontmostRoot: frontmostRoot,
-            transform: transform,
-            deadline: deadline
-        ))
+        return try body(
+            AXPContext(
+                translator: translator,
+                token: token,
+                frontmostRoot: frontmostRoot,
+                transform: transform,
+                deadline: deadline
+            ))
     }
 
     /// Grid step / point cap for the hit-test sweep. 32 pt is fine
@@ -259,15 +245,19 @@ final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
     /// which backs its describe-point CLI with the same selector.
     private func discover(at point: Point, ctx: AXPContext, depthCap: Int) -> AXNode? {
         let hostPoint = ctx.transform.unmap(CGPoint(x: point.x, y: point.y))
-        guard let hitTranslation = Self.objectAtPoint(
-            translator: ctx.translator, point: hostPoint,
-            displayId: 0, token: ctx.token
-        ) else { return nil }
+        guard
+            let hitTranslation = Self.objectAtPoint(
+                translator: ctx.translator, point: hostPoint,
+                displayId: 0, token: ctx.token
+            )
+        else { return nil }
         Self.stamp(token: ctx.token, on: hitTranslation)
 
-        guard let hitElement = Self.macPlatformElement(
-            translator: ctx.translator, translation: hitTranslation
-        ) else { return nil }
+        guard
+            let hitElement = Self.macPlatformElement(
+                translator: ctx.translator, translation: hitTranslation
+            )
+        else { return nil }
         Self.stampElementTranslation(token: ctx.token, on: hitElement)
         // Only stamp the subtree when we'll actually walk it — a
         // shallow (depth 0) sweep hit reads no children.
@@ -319,7 +309,8 @@ final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
     }
 
     nonisolated(unsafe) private static let frameworksLoaded: Bool = {
-        let path = "/System/Library/PrivateFrameworks/AccessibilityPlatformTranslation.framework/AccessibilityPlatformTranslation"
+        let path =
+            "/System/Library/PrivateFrameworks/AccessibilityPlatformTranslation.framework/AccessibilityPlatformTranslation"
         if dlopen(path, RTLD_NOW | RTLD_GLOBAL) == nil {
             logErr("[ax] AccessibilityPlatformTranslation dlopen failed: \(dlerrorString())")
             return false
@@ -335,7 +326,8 @@ final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
         }
         let sel = NSSelectorFromString("sharedInstance")
         guard let metaCls = object_getClass(cls),
-              let imp = class_getMethodImplementation(metaCls, sel) else {
+            let imp = class_getMethodImplementation(metaCls, sel)
+        else {
             logErr("[ax] +sharedInstance not found")
             return nil
         }
@@ -346,7 +338,7 @@ final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
         }
         // Critical: install the token delegate so the translator can
         // route XPC requests to the right SimDevice. Without this
-        // step every frontmost-app call returns nil.
+        // step child-element requests cannot reach the device.
         inst.setValue(sharedDispatcher, forKey: "bridgeTokenDelegate")
         log("[ax] AXPTranslator wired with bridgeTokenDelegate")
         return inst
@@ -356,25 +348,13 @@ final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
 
     // MARK: - AXPTranslator entry points
 
-    private static func frontmostApplication(
-        translator: NSObject, token: String
-    ) -> NSObject? {
-        let sel = NSSelectorFromString("frontmostApplicationWithDisplayId:bridgeDelegateToken:")
-        guard translator.responds(to: sel),
-              let imp = class_getMethodImplementation(type(of: translator), sel) else {
-            logErr("[ax] -frontmostApplicationWithDisplayId:bridgeDelegateToken: not found")
-            return nil
-        }
-        typealias Fn = @convention(c) (AnyObject, Selector, UInt32, AnyObject) -> AnyObject?
-        return unsafeBitCast(imp, to: Fn.self)(translator, sel, 0, token as NSString) as? NSObject
-    }
-
     private static func macPlatformElement(
         translator: NSObject, translation: NSObject
     ) -> NSObject? {
         let sel = NSSelectorFromString("macPlatformElementFromTranslation:")
         guard translator.responds(to: sel),
-              let imp = class_getMethodImplementation(type(of: translator), sel) else {
+            let imp = class_getMethodImplementation(type(of: translator), sel)
+        else {
             logErr("[ax] -macPlatformElementFromTranslation: not found")
             return nil
         }
@@ -396,7 +376,8 @@ final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
     ) -> NSObject? {
         let sel = NSSelectorFromString("objectAtPoint:displayId:bridgeDelegateToken:")
         guard translator.responds(to: sel),
-              let imp = class_getMethodImplementation(type(of: translator), sel) else {
+            let imp = class_getMethodImplementation(type(of: translator), sel)
+        else {
             logErr("[ax] -objectAtPoint:displayId:bridgeDelegateToken: not found")
             return nil
         }
@@ -494,19 +475,22 @@ final class TokenDispatcher: NSObject, @unchecked Sendable {
     private var deadlineForToken: [String: Date] = [:]
 
     func register(device: NSObject, token: String, deadline: Date) {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         deviceForToken[token] = device
         deadlineForToken[token] = deadline
     }
 
     func unregister(token: String) {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         deviceForToken.removeValue(forKey: token)
         deadlineForToken.removeValue(forKey: token)
     }
 
     private func lookup(token: String) -> (NSObject, Date)? {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         guard let dev = deviceForToken[token] else { return nil }
         return (dev, deadlineForToken[token] ?? Date.distantFuture)
     }
@@ -543,6 +527,36 @@ final class TokenDispatcher: NSObject, @unchecked Sendable {
         nil
     }
 
+    /// PID requests are sent directly: AXPTranslator's PID convenience method
+    /// uses an empty bridge token, which cannot safely identify concurrent devices.
+    func application(pid: Int32, on device: NSObject, udid: String, timeout: Double) throws -> NSObject {
+        let selector = NSSelectorFromString("new")
+        guard let cls = NSClassFromString("AXPTranslatorRequest"),
+            let meta = object_getClass(cls),
+            let imp = class_getMethodImplementation(meta, selector)
+        else {
+            throw ApplicationFailure(udid: udid, pid: pid, cause: "AXPTranslatorRequest is unavailable")
+        }
+        typealias New = @convention(c) (AnyClass, Selector) -> Unmanaged<NSObject>
+        let request = unsafeBitCast(imp, to: New.self)(cls, selector).takeRetainedValue()
+        // AXP's application-by-PID request, observed on the iOS 26 wire.
+        request.setValue(1, forKey: "requestType")
+        request.setValue(["pid": pid], forKey: "parameters")
+        guard let response = sendAccessibilityRequest(request, to: device, timeout: timeout) as? NSObject,
+            let translation = response.value(forKey: "translationResponse") as? NSObject
+        else {
+            throw ApplicationFailure(udid: udid, pid: pid, cause: "the device returned no application translation")
+        }
+        return translation
+    }
+
+    private struct ApplicationFailure: LocalizedError {
+        let udid: String
+        let pid: Int32
+        let cause: String
+        var errorDescription: String? { "AX application lookup for \(udid) (PID \(pid)) failed: \(cause)" }
+    }
+
     /// Synchronous wrapper around `SimDevice.sendAccessibilityRequestAsync:`.
     /// Waits up to `timeout` seconds for the XPC reply.
     private func sendAccessibilityRequest(
@@ -553,9 +567,10 @@ final class TokenDispatcher: NSObject, @unchecked Sendable {
             logErr("[ax] SimDevice.sendAccessibilityRequestAsync not found")
             return nil
         }
-        typealias Fn = @convention(c) (
-            AnyObject, Selector, AnyObject, DispatchQueue, Any
-        ) -> Void
+        typealias Fn =
+            @convention(c) (
+                AnyObject, Selector, AnyObject, DispatchQueue, Any
+            ) -> Void
         let send = unsafeBitCast(imp, to: Fn.self)
 
         let group = DispatchGroup()
@@ -589,7 +604,8 @@ final class TokenDispatcher: NSObject, @unchecked Sendable {
         if let cls = NSClassFromString("AXPTranslatorResponse") {
             let sel = NSSelectorFromString("emptyResponse")
             if let metaCls = object_getClass(cls),
-               let imp = class_getMethodImplementation(metaCls, sel) {
+                let imp = class_getMethodImplementation(metaCls, sel)
+            {
                 typealias Fn = @convention(c) (AnyClass, Selector) -> AnyObject?
                 if let resp = unsafeBitCast(imp, to: Fn.self)(cls, sel) {
                     return resp

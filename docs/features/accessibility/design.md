@@ -60,23 +60,36 @@ AXP invokes the delegate via ObjC dispatch.
 ### Per-call dance
 
 ```
-1. Token = UUID().uuidString
-2. dispatcher.register(device: simDevice, token, deadline)
-3. translation = translator.frontmostApplicationWithDisplayId:0
-                                          bridgeDelegateToken:token
-4. translation.bridgeDelegateToken = token   ← critical, see below
+1. simctl [--set path] spawn UDID HingeControl frontmost → live PID
+2. SimDevice.sendAccessibilityRequestAsync(requestType: 1, parameters: {pid})
+3. Token = UUID().uuidString; register device + tree deadline
+4. translation.bridgeDelegateToken = token
 5. root = translator.macPlatformElementFromTranslation:translation
-6. root.translation.bridgeDelegateToken = token
-7. walk root.accessibilityChildren, stamping the token onto each
-   child's `translation` sub-property
-8. dispatcher.unregister(token)
+6. walk root.accessibilityChildren, stamping the token onto each translation
+7. dispatcher.unregister(token)
 ```
 
-Step 4 is the single most important thing. The translator stores
-the token internally, but it re-reads `bridgeDelegateToken` from
+The translator re-reads `bridgeDelegateToken` from
 **every translation object** it touches — if a child object was
 returned by AXP without our token stamped on it, the next sub-XPC
 silently fails.
+
+### Fresh guest frontmost discovery
+
+On iOS 26.5 the CoreSimulatorBridge frontmost request can return an empty
+`AXPTranslatorResponse` even while its application-by-PID requests work.
+Each query therefore asks the guest window server for the current frontmost
+PID in a fresh HingeControl process. Its AX translator routes requests to
+its own `processTranslatorRequest:`; no HID service is initialized.
+The implementation follows [idb's guest runtime](https://github.com/facebook/idb/blob/1c5c81f6cbe3a31986eda66349fd22a2f9b47858/SimulatorFrameworkBridge/Runtime/AccessibilityRuntime.m#L831)
+and retains its MIT notice in the helper's resource directory.
+
+The guest exits within four seconds, and the host bounds `simctl` exit and
+pipe drain to five seconds. Missing helpers, invalid PIDs, failed processes,
+and missing PID translations fail explicitly. There is no cached-PID path.
+PID lookup goes directly to the selected SimDevice: the host translator's
+PID convenience method emits an empty token, unsafe for concurrent devices.
+The tree's deadline starts after this discovery completes.
 
 ## Coordinates
 

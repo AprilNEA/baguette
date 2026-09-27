@@ -115,7 +115,7 @@ final class CoreSimulator: Simulator, @unchecked Sendable {
 
     func accessibility() -> any Accessibility {
         AXPTranslatorAccessibility(
-            udid: udid, host: host,
+            udid: udid, host: host, deviceSetPath: deviceSetPath,
             litPanelPointSize: { [udid, host, deviceSetPath] in
                 // Only a foldable has a panel to choose; a phone keeps the
                 // device type's `mainScreenSize` and pays no round-trip.

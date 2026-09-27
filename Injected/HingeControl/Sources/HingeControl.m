@@ -1,3 +1,4 @@
+// The read-only `frontmost` subcommand runs before any HID initialization.
 // HingeControl — drives iPhone Duo's hinge (and its orientation picker)
 // from inside the simulator, the way Device Hub does.
 //
@@ -42,6 +43,7 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <mach/mach_time.h>
+#import "Frontmost.h"
 
 typedef void *IOHIDEventRef;
 static IOHIDEventRef (*IOHIDEventCreateVendorDefinedEvent)(CFAllocatorRef, uint64_t, uint32_t, uint32_t, uint32_t, uint8_t *, CFIndex, uint32_t);
@@ -106,6 +108,8 @@ static NSData *orientationPayload(const char *value) {
 
 int main(int argc, char **argv) {
   @autoreleasepool {
+    // AX discovery must not load HID frameworks or register input services.
+    if (argc == 2 && strcmp(argv[1], "frontmost") == 0) return printFrontmostApplication();
     if (argc < 2) { fprintf(stderr, "usage: HingeControl angle <deg> | sweep <from> <to> <ms> | orientation <portrait|landscapeLeft|landscapeRight|portraitUpsideDown> | button <page> <usage> <ms>\n"); return 2; }
     dlopen("/System/Library/PrivateFrameworks/HID.framework/HID", RTLD_NOW);
     void *iokit = dlopen("/System/Library/Frameworks/IOKit.framework/IOKit", RTLD_NOW);

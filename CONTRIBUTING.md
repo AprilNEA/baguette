@@ -8,6 +8,7 @@ Apple Silicon and **Xcode 26.4.1 or later**. baguette links Xcode's private `Cor
 
 ```bash
 make                     # release build via ./build.sh → ./Baguette
+./Injected/build.sh      # refresh guest helpers before direct Swift builds
 swift build              # debug build (carries the MOCKING flag + mocks)
 swift test               # the Swift Testing suite; no booted simulator needed
 swift test --filter Simulators                   # one suite
@@ -18,7 +19,7 @@ make check-docs          # links, line budgets, changelog shape
 make test-changelog      # the release-time changelog scripts
 ```
 
-The build is hybrid: SPM fetches the dependencies (`ArgumentParser`, `Mockable`, `Hummingbird`, `HummingbirdWebSocket`) and compiles for `arm64e-apple-macos26.0` with an Objective-C bridging header, linking `CoreSimulator`, `SimulatorKit`, `IOSurface`, `VideoToolbox`, `CoreGraphics` and `ImageIO` from Xcode's private frameworks. `build.sh` builds the injected dylibs under `Injected/` first, then runs `swift build -c release`.
+The build is hybrid: SPM fetches the dependencies (`ArgumentParser`, `Mockable`, `Hummingbird`, `HummingbirdWebSocket`) and compiles for `arm64e-apple-macos26.0` with an Objective-C bridging header, linking `CoreSimulator`, `SimulatorKit`, `IOSurface`, `VideoToolbox`, `CoreGraphics` and `ImageIO` from Xcode's private frameworks. `build.sh` builds the guest helpers and injected dylibs under `Injected/` first, then runs `swift build -c release` (extra arguments are forwarded). Direct `swift build` and `swift test` require `./Injected/build.sh` after changing guest sources; otherwise SPM copies the previously staged binaries.
 
 ## Troubleshooting the Homebrew install
 

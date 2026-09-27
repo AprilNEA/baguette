@@ -3,12 +3,12 @@ import Testing
 
 @testable import Baguette
 
-@Suite("SimctlIOCapture")
-struct SimctlIOCaptureTests {
+@Suite("SimctlCapture")
+struct SimctlCaptureTests {
     @Test func `enumeration preserves the resolved custom device set`() throws {
         let script = try Script("printf '%s\\n' \"$@\"")
         defer { script.remove() }
-        let output = try SimctlIOCapture.enumerate(
+        let output = try SimctlCapture.enumerate(
             udid: "device-id", deviceSetPath: "/custom set/Devices", xcrun: script.url)
         #expect(output == "simctl\n--set\n/custom set/Devices\nio\ndevice-id\nenumerate\n")
     }
@@ -17,14 +17,14 @@ struct SimctlIOCaptureTests {
         let script = try Script("printf '%s\\n' \"$@\"")
         defer { script.remove() }
         #expect(
-            try SimctlIOCapture.enumerate(udid: "device-id", xcrun: script.url)
+            try SimctlCapture.enumerate(udid: "device-id", xcrun: script.url)
                 == "simctl\nio\ndevice-id\nenumerate\n")
     }
 
     @Test func `output larger than the pipe buffer is drained completely`() throws {
         let script = try Script("/usr/bin/head -c 262144 /dev/zero; printf end")
         defer { script.remove() }
-        let output = try SimctlIOCapture.enumerate(udid: "device-id", xcrun: script.url, timeout: 10)
+        let output = try SimctlCapture.enumerate(udid: "device-id", xcrun: script.url, timeout: 10)
         #expect(output.utf8.count == 262147)
         #expect(output.hasSuffix("end"))
     }
@@ -34,8 +34,8 @@ struct SimctlIOCaptureTests {
         defer { script.remove() }
         let process = Process()
         let start = ContinuousClock.now
-        #expect(throws: SimctlIOCapture.Failure.timedOut(udid: "device-id", seconds: 1)) {
-            try SimctlIOCapture.enumerate(udid: "device-id", xcrun: script.url, timeout: 1, process: process)
+        #expect(throws: SimctlCapture.Failure.timedOut(udid: "device-id", seconds: 1)) {
+            try SimctlCapture.enumerate(udid: "device-id", xcrun: script.url, timeout: 1, process: process)
         }
         #expect(start.duration(to: .now) < .seconds(5))
         let pid = process.processIdentifier
@@ -51,10 +51,10 @@ struct SimctlIOCaptureTests {
         let script = try Script("echo 'CoreSimulator unavailable' >&2; exit 7")
         defer { script.remove() }
         #expect(
-            throws: SimctlIOCapture.Failure.failed(
+            throws: SimctlCapture.Failure.failed(
                 udid: "device-id", status: 7, output: "CoreSimulator unavailable\n")
         ) {
-            try SimctlIOCapture.enumerate(udid: "device-id", xcrun: script.url)
+            try SimctlCapture.enumerate(udid: "device-id", xcrun: script.url)
         }
     }
 
