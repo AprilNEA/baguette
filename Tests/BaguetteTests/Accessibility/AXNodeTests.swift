@@ -1,5 +1,6 @@
-import Testing
 import Foundation
+import Testing
+
 @testable import Baguette
 
 @Suite("AXNode")
@@ -16,8 +17,9 @@ struct AXNodeTests {
             identifier: "sign-in-button",
             title: "Login",
             help: "Tap to authenticate",
-            frame: Rect(origin: Point(x: 12, y: 34),
-                        size: Size(width: 100, height: 44)),
+            frame: Rect(
+                origin: Point(x: 12, y: 34),
+                size: Size(width: 100, height: 44)),
             enabled: true,
             focused: false,
             hidden: false,
@@ -113,6 +115,20 @@ struct AXNodeTests {
     }
 
     // MARK: - traversal
+
+    @Test(arguments: [
+        Rect(origin: Point(x: 0, y: 0), size: Size(width: 0, height: 0)),
+        Rect(origin: Point(x: 20, y: 40), size: Size(width: 30, height: 60)),
+    ])
+    func `hitTest reaches children outside application bounds`(bounds: Rect) {
+        let child = AXNode(
+            role: "AXButton",
+            frame: Rect(origin: Point(x: 100, y: 200), size: Size(width: 84, height: 48))
+        )
+        let root = AXNode(role: "AXApplication", frame: bounds, children: [child])
+        #expect(root.hitTest(Point(x: 142, y: 224)) == child)
+        #expect(root.hitTest(Point(x: 184, y: 224)) == nil)
+    }
 
     @Test func `hitTest returns the deepest node containing the point`() {
         let leaf = AXNode(

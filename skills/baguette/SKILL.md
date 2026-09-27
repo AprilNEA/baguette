@@ -158,6 +158,8 @@ presentation surface; gestures still target the live 2D stream.
 ## What's wired vs what isn't
 
 Wired (use freely):
+- `screenshot --metadata-output` writes capture geometry to a JSON sidecar;
+  see [screenshot geometry](https://github.com/tddworks/baguette/blob/main/docs/features/screenshot/geometry.md).
 - `tap`, `swipe`, `touch1-{down,move,up}`, `touch2-{down,move,up}`,
   `pinch`, `pan`, `scroll`. `touch1-*` events accept an optional
   `edge: "bottom" | "top" | "left" | "right"` field that flags every

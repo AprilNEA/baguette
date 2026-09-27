@@ -1,5 +1,5 @@
-import Foundation
 import CoreGraphics
+import Foundation
 import IOSurface
 
 /// One-shot frame capture: open `Screen`, wait for the first IOSurface
@@ -9,6 +9,11 @@ import IOSurface
 /// guards against an idle / wedged simulator that never fires its frame
 /// callback.
 enum ScreenSnapshot {
+
+    struct Frame: Sendable {
+        let bytes: Data
+        let geometry: CaptureGeometry
+    }
 
     enum Failure: Error, Equatable {
         case timeout
@@ -32,6 +37,24 @@ enum ScreenSnapshot {
         background: String = "transparent",
         format: CaptureFormat = .jpeg
     ) async throws -> Data {
+        try await captureWithGeometry(
+            screen: screen, quality: quality, scale: scale, timeout: timeout,
+            size: size, fit: fit, background: background, format: format
+        ).bytes
+    }
+
+    /// Geometry and encoded bytes come from the same delivered surface
+    /// and the same placement; no second query can race a display change.
+    static func captureWithGeometry(
+        screen: any Screen,
+        quality: Double = 0.85,
+        scale: Int = 1,
+        timeout: TimeInterval = 2.0,
+        size: CaptureSize = .native,
+        fit: CaptureFit = .contain,
+        background: String = "transparent",
+        format: CaptureFormat = .jpeg
+    ) async throws -> Frame {
         let session = SnapshotSession(
             quality: quality, scale: scale,
             size: size, fit: fit, background: background, format: format
@@ -39,7 +62,7 @@ enum ScreenSnapshot {
 
         defer { screen.stop() }
 
-        return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Data, Error>) in
+        return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Frame, Error>) in
             let timer = DispatchSource.makeTimerSource(queue: .global())
             timer.schedule(deadline: .now() + timeout)
             timer.setEventHandler {
@@ -52,8 +75,8 @@ enum ScreenSnapshot {
                 try screen.start { surface in
                     guard session.claim() else { return }
                     timer.cancel()
-                    if let bytes = session.encode(surface) {
-                        cont.resume(returning: bytes)
+                    if let frame = session.encode(surface) {
+                        cont.resume(returning: frame)
                     } else {
                         cont.resume(throwing: Failure.encodeFailed)
                     }
@@ -98,27 +121,41 @@ private final class SnapshotSession: @unchecked Sendable {
     }
 
     func claim() -> Bool {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         if taken { return false }
         taken = true
         return true
     }
 
     /// Downscale (if asked), lift to a `CGImage`, re-lay onto the
-    /// requested canvas, encode. A `native` size short-circuits the
-    /// re-lay inside `CaptureCanvas`, so the default path is still one
-    /// context and one encode.
-    func encode(_ surface: IOSurface) -> Data? {
+    /// requested canvas, encode. The identity placement keeps native
+    /// captures on the historical path without another resampling.
+    func encode(_ surface: IOSurface) -> ScreenSnapshot.Frame? {
         let lifted: CGImage?
-        if let scaler, let scaled = scaler.scale(surface, by: scale) {
+        if let scaler {
+            guard let scaled = scaler.scale(surface, by: scale) else { return nil }
             lifted = CaptureCanvas.image(from: scaled)
         } else {
             lifted = CaptureCanvas.image(from: surface)
         }
-        guard let lifted,
-              let composed = CaptureCanvas.apply(
-                  size: size, fit: fit, background: background, to: lifted
-              ) else { return nil }
-        return CaptureCanvas.encode(composed, format: format, quality: quality)
+        guard let lifted else { return nil }
+        let scaledPixels = RenderDimensions(width: lifted.width, height: lifted.height)
+        let placement = size.plan(source: scaledPixels, fit: fit)
+        guard
+            let composed = CaptureCanvas.compose(
+                lifted, placement: placement, background: CaptureCanvas.background(background)
+            ), let bytes = CaptureCanvas.encode(composed, format: format, quality: quality)
+        else { return nil }
+        return ScreenSnapshot.Frame(
+            bytes: bytes,
+            geometry: CaptureGeometry(
+                framebufferPixels: RenderDimensions(
+                    width: IOSurfaceGetWidth(surface), height: IOSurfaceGetHeight(surface)
+                ),
+                scaledPixels: scaledPixels,
+                placement: placement
+            )
+        )
     }
 }
