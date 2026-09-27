@@ -7,26 +7,36 @@ import Testing
 @Suite("IndigoHIDMessageTests", .serialized)
 struct IndigoHIDMessageTests {
     @Test(arguments: [false, true])
-    func `waits for asynchronous transport completion and reports its result`(fails: Bool) throws {
-        let client = DeferredHIDClient()
-        let returned = DispatchSemaphore(value: 0)
-        let result = Mutex<Bool?>(nil)
-        DispatchQueue.global().async {
-            defer { returned.signal() }
-            do {
-                let message = try #require(malloc(8))
-                let ok = IndigoHIDMessage.send(message, to: client)
-                result.withLock { $0 = ok }
-            } catch {
-                Issue.record(error)
+    func `waits for asynchronous transport completion and reports its result`(fails: Bool) async throws {
+        let (sends, received) = AsyncStream<Void>.makeStream()
+        let client = DeferredHIDClient(onSend: {
+            received.yield()
+            received.finish()
+        })
+        let returned = Mutex(false)
+        async let result: Bool = withCheckedThrowingContinuation { continuation in
+            // A synchronous send must not occupy the cooperative test executor.
+            Thread.detachNewThread {
+                defer {
+                    returned.withLock { $0 = true }
+                    received.finish()
+                }
+                do {
+                    let message = try #require(malloc(8))
+                    // Timeout behavior is covered separately; completion is gated here.
+                    let ok = IndigoHIDMessage.send(message, to: client, deadline: .distantFuture)
+                    continuation.resume(returning: ok)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
             }
         }
         defer { client.complete(error: nil) }
-        try #require(client.received.wait(timeout: .now() + 1) == .success)
-        #expect(returned.wait(timeout: .now() + 0.05) == .timedOut)
+        for await _ in sends {}
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(!returned.withLock { $0 })
         client.complete(error: fails ? Self.error : nil)
-        try #require(returned.wait(timeout: .now() + 1) == .success)
-        #expect(result.withLock { $0 } == !fails)
+        #expect(try await result == !fails)
     }
 
     @Test @MainActor
@@ -102,9 +112,11 @@ private final class DeferredHIDClient: NSObject, @unchecked Sendable {
     private var pending: Pending?
     private var count = 0
     private let automaticResults: [NSError?]?
+    private let onSend: (@Sendable () -> Void)?
 
-    init(automaticResults: [NSError?]? = nil) {
+    init(automaticResults: [NSError?]? = nil, onSend: (@Sendable () -> Void)? = nil) {
         self.automaticResults = automaticResults
+        self.onSend = onSend
     }
 
     var sentCount: Int { lock.withLock { count } }
@@ -124,6 +136,7 @@ private final class DeferredHIDClient: NSObject, @unchecked Sendable {
             return count - 1
         }
         received.signal()
+        onSend?()
         if let automaticResults { complete(error: automaticResults[index]) }
     }
 
