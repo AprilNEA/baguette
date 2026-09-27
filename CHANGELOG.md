@@ -10,6 +10,10 @@ For releases prior to this changelog, see the
 
 ## [Unreleased]
 
+---
+
+## [0.2.1] - 2026-09-27
+
 ### Fixed
 - The AX inspector and `baguette describe-ui` tree hit tests can select descendants outside empty or smaller container frames. → [docs](docs/features/accessibility/README.md#gotchas) ([#89](https://github.com/tddworks/baguette/pull/89))
 - `baguette stream` no longer crashes on startup and now releases capture resources when stopped by Ctrl-C or SIGTERM.
@@ -37,5 +41,6 @@ For releases prior to this changelog, see the
 
 [0.1](docs/changelog/0.1.md)
 
-[Unreleased]: https://github.com/tddworks/baguette/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/tddworks/baguette/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/tddworks/baguette/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tddworks/baguette/compare/v0.1.99...v0.2.0
