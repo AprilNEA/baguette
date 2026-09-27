@@ -69,16 +69,15 @@ struct AXNode: Equatable, Sendable {
 
     /// Recursive walk: deepest descendant whose `frame` contains
     /// `point` wins, or `self` when `point` is inside `self.frame`
-    /// but no child claims it. Returns `nil` when `point` is
-    /// outside `self.frame`. Frames are interpreted as half-open
+    /// but no child claims it. AX containers do not clip descendants;
+    /// their frame may be empty or smaller than a child's. Frames are half-open
     /// rectangles (`[origin, origin + size)`), matching the
     /// convention CGRect uses.
     func hitTest(_ point: Point) -> AXNode? {
-        guard contains(point) else { return nil }
         for child in children {
             if let hit = child.hitTest(point) { return hit }
         }
-        return self
+        return contains(point) ? self : nil
     }
 
     private func contains(_ p: Point) -> Bool {
@@ -151,44 +150,44 @@ struct AXNode: Equatable, Sendable {
 
         return AXNode(
             role: role,
-            subrole:    AXElementReader.string(element, "accessibilitySubrole"),
-            label:      AXElementReader.string(element, "accessibilityLabel"),
-            value:      AXElementReader.stringOrNumber(element, "accessibilityValue"),
+            subrole: AXElementReader.string(element, "accessibilitySubrole"),
+            label: AXElementReader.string(element, "accessibilityLabel"),
+            value: AXElementReader.stringOrNumber(element, "accessibilityValue"),
             identifier: AXElementReader.string(element, "accessibilityIdentifier"),
-            title:      AXElementReader.string(element, "accessibilityTitle"),
-            help:       AXElementReader.string(element, "accessibilityHelp"),
+            title: AXElementReader.string(element, "accessibilityTitle"),
+            help: AXElementReader.string(element, "accessibilityHelp"),
             frame: Rect(
                 origin: Point(x: Double(projected.origin.x), y: Double(projected.origin.y)),
                 size: Size(width: Double(projected.size.width), height: Double(projected.size.height))
             ),
             enabled: AXElementReader.bool(element, "accessibilityEnabled", default: true)
-                  || AXElementReader.bool(element, "isAccessibilityEnabled", default: false),
+                || AXElementReader.bool(element, "isAccessibilityEnabled", default: false),
             focused: AXElementReader.bool(element, "isAccessibilityFocused", default: false)
-                  || AXElementReader.bool(element, "accessibilityFocused", default: false),
-            hidden:  AXElementReader.bool(element, "isAccessibilityHidden", default: false)
-                  || AXElementReader.bool(element, "accessibilityHidden", default: false),
+                || AXElementReader.bool(element, "accessibilityFocused", default: false),
+            hidden: AXElementReader.bool(element, "isAccessibilityHidden", default: false)
+                || AXElementReader.bool(element, "accessibilityHidden", default: false),
             children: children
         )
     }
 
     fileprivate var dictionary: [String: Any] {
         [
-            "role":       role,
-            "subrole":    subrole as Any? ?? NSNull(),
-            "label":      label as Any? ?? NSNull(),
-            "value":      value as Any? ?? NSNull(),
+            "role": role,
+            "subrole": subrole as Any? ?? NSNull(),
+            "label": label as Any? ?? NSNull(),
+            "value": value as Any? ?? NSNull(),
             "identifier": identifier as Any? ?? NSNull(),
-            "title":      title as Any? ?? NSNull(),
-            "help":       help as Any? ?? NSNull(),
+            "title": title as Any? ?? NSNull(),
+            "help": help as Any? ?? NSNull(),
             "frame": [
-                "x":      frame.origin.x,
-                "y":      frame.origin.y,
-                "width":  frame.size.width,
+                "x": frame.origin.x,
+                "y": frame.origin.y,
+                "width": frame.size.width,
                 "height": frame.size.height,
             ],
-            "enabled":  enabled,
-            "focused":  focused,
-            "hidden":   hidden,
+            "enabled": enabled,
+            "focused": focused,
+            "hidden": hidden,
             "children": children.map(\.dictionary),
         ]
     }

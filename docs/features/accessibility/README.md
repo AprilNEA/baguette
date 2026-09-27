@@ -84,6 +84,9 @@ GET /simulators/<udid>/describe-ui.json?x=172&y=880
 
 ## Gotchas
 
+- **Container frames do not clip descendants.** A container can have an
+  empty or smaller frame while its children remain selectable in the web
+  inspector and tree-based hit tests.
 - **Tree is a snapshot.** No subscribe / change notifications.
   Callers re-issue `describe_ui` after each gesture.
 - **Frontmost-app only.** SpringBoard idle returns `null` for some
