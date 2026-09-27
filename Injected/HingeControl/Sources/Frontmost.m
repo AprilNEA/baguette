@@ -9,6 +9,8 @@
 #import <dispatch/dispatch.h>
 #import <dlfcn.h>
 #import <objc/runtime.h>
+#include <stdatomic.h>
+#include <unistd.h>
 
 @interface NSObject (FrontmostTranslation)
 + (id)sharediOSInstance;
@@ -30,12 +32,19 @@
 @end
 
 int printFrontmostApplication(void) {
-  dispatch_semaphore_t complete = dispatch_semaphore_create(0);
-  __block NSNumber *pid;
-  __block NSString *failure;
-  // The guest AX runtime asserts that its first query is off the main queue.
+  __block atomic_bool completed = false;
+  // Independent of the main queue: even a blocked AX callback must exit.
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 4 * NSEC_PER_SEC), dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    if (!atomic_exchange_explicit(&completed, true, memory_order_relaxed)) {
+      dprintf(STDERR_FILENO, "frontmost query timed out after 4 seconds\n");
+      _Exit(1);
+    }
+  });
+  // Query off main, while dispatch_main services AX's initialization callbacks.
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
     @autoreleasepool {
+      NSNumber *pid = nil;
+      NSString *failure = nil;
       @try {
         if (!dlopen("/System/Library/PrivateFrameworks/AccessibilityPlatformTranslation.framework/AccessibilityPlatformTranslation", RTLD_NOW)) {
           failure = [NSString stringWithUTF8String:dlerror()];
@@ -59,17 +68,15 @@ int printFrontmostApplication(void) {
       } @catch (NSException *exception) {
         failure = exception.reason ?: exception.name;
       }
-      dispatch_semaphore_signal(complete);
+      // Only one terminal path writes a response; the deadline can race success.
+      if (atomic_exchange_explicit(&completed, true, memory_order_relaxed)) return;
+      if (failure) {
+        dprintf(STDERR_FILENO, "frontmost query failed: %s\n", failure.UTF8String);
+        _Exit(1);
+      }
+      dprintf(STDOUT_FILENO, "{\"pid\":%d}\n", pid.intValue);
+      _Exit(0);
     }
   });
-  if (dispatch_semaphore_wait(complete, dispatch_time(DISPATCH_TIME_NOW, 4 * NSEC_PER_SEC)) != 0) {
-    fprintf(stderr, "frontmost query timed out after 4 seconds\n");
-    return 1;
-  }
-  if (failure) {
-    fprintf(stderr, "frontmost query failed: %s\n", failure.UTF8String);
-    return 1;
-  }
-  printf("{\"pid\":%d}\n", pid.intValue);
-  return 0;
+  dispatch_main();
 }

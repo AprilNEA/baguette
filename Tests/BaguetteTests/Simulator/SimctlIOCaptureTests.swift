@@ -30,12 +30,17 @@ struct SimctlCaptureTests {
     }
 
     @Test func `a child that closes output but ignores termination is killed at the deadline`() throws {
-        let script = try Script("trap '' TERM; exec 1>&- 2>&-; exec /bin/sleep 30")
-        defer { script.remove() }
         let process = Process()
         let start = ContinuousClock.now
-        #expect(throws: SimctlCapture.Failure.timedOut(udid: "device-id", seconds: 1)) {
-            try SimctlCapture.enumerate(udid: "device-id", xcrun: script.url, timeout: 1, process: process)
+        #expect(
+            throws: SimctlCapture.Failure.timedOut(
+                udid: "device-id", seconds: 1, processExited: false, output: "guest started\n")
+        ) {
+            try SimctlCapture.run(
+                udid: "device-id",
+                arguments: ["-c", "echo 'guest started' >&2; trap '' TERM; exec 1>&- 2>&-; exec /bin/sleep 30"],
+                xcrun: URL(fileURLWithPath: "/bin/sh"), timeout: 1, process: process
+            )
         }
         #expect(start.duration(to: .now) < .seconds(5))
         let pid = process.processIdentifier

@@ -84,8 +84,12 @@ its own `processTranslatorRequest:`; no HID service is initialized.
 The implementation follows [idb's guest runtime](https://github.com/facebook/idb/blob/1c5c81f6cbe3a31986eda66349fd22a2f9b47858/SimulatorFrameworkBridge/Runtime/AccessibilityRuntime.m#L831)
 and retains its MIT notice in the helper's resource directory.
 
-The guest exits within four seconds, and the host bounds `simctl` exit and
-pipe drain to five seconds. Missing helpers, invalid PIDs, failed processes,
+The guest exits within four seconds of reaching `main`, with an independent
+watchdog. Its main queue stays live while the query runs off-main: blocking
+main delays `_enableAccessibilityBridgeRuntime` callbacks by three seconds
+on iOS 26.5. The host allows ten seconds for `simctl` startup, guest work,
+exit and pipe drain. Other simctl queries retain their five-second budget.
+Host timeout errors preserve partial output and the unfinished phase. Missing helpers, invalid PIDs, failed processes,
 and missing PID translations fail explicitly. There is no cached-PID path.
 PID lookup goes directly to the selected SimDevice: the host translator's
 PID convenience method emits an empty token, unsafe for concurrent devices.

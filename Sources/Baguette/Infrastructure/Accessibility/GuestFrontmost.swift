@@ -27,7 +27,9 @@ enum GuestFrontmost {
             udid: udid,
             arguments: ["simctl"] + (deviceSetPath.map { ["--set", $0] } ?? [])
                 + ["spawn", udid, tool, "frontmost"],
-            xcrun: xcrun
+            // Guest AX is bounded to 4s after main starts. Allow separate time
+            // for simctl/dyld startup and pipe drain.
+            xcrun: xcrun, timeout: 10
         )
         do {
             return try AXFrontmost.pid(from: Data(output.utf8))
