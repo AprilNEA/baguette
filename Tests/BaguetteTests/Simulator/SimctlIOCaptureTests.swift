@@ -58,6 +58,50 @@ struct SimctlIOCaptureTests {
         }
     }
 
+    @Test func `timeout cancels an open output pipe and releases its reader`() async throws {
+        let script = try Script("printf started; exec /bin/sleep 30")
+        defer { script.remove() }
+        let process = Process()
+        let start = ContinuousClock.now
+        #expect(throws: SimctlIOCapture.Failure.timedOut(udid: "device-id", seconds: 1)) {
+            try SimctlIOCapture.enumerate(udid: "device-id", xcrun: script.url, timeout: 1, process: process)
+        }
+        #expect(start.duration(to: .now) < .seconds(5))
+        try #require(!process.isRunning)
+        #expect(process.terminationStatus == SIGKILL)
+        let pipe = try #require(process.standardOutput as? Pipe)
+        try await Self.expectClosed(pipe.fileHandleForReading)
+    }
+
+    @Test func `launch failure releases the output reader without waiting for the deadline`() async throws {
+        let script = try Script("exit 0")
+        defer { script.remove() }
+        let process = Process()
+        let start = ContinuousClock.now
+        #expect(throws: CocoaError.self) {
+            try SimctlIOCapture.enumerate(
+                udid: "device-id", xcrun: script.directory.appendingPathComponent("missing"),
+                timeout: 30, process: process)
+        }
+        #expect(start.duration(to: .now) < .seconds(5))
+        let pipe = try #require(process.standardOutput as? Pipe)
+        try await Self.expectClosed(pipe.fileHandleForReading)
+    }
+
+    private static func expectClosed(_ handle: FileHandle) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while ContinuousClock.now < deadline {
+            do {
+                _ = try handle.read(upToCount: 0)
+            } catch {
+                #expect(error is CocoaError)
+                return
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        Issue.record("The output reader remained open after cancellation")
+    }
+
     private struct Script {
         let directory: URL
         var url: URL { directory.appendingPathComponent("xcrun") }
