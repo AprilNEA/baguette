@@ -11,6 +11,7 @@ For releases prior to this changelog, see the
 ## [Unreleased]
 
 ### Fixed
+- Input commands wait for HID transmission before reporting success or exiting; transmission errors and timeouts report failure. See [dispatch semantics](docs/features/touches/design.md#5-dispatch).
 - `baguette stream` no longer crashes on startup and now releases capture resources when stopped by Ctrl-C or SIGTERM.
 - `baguette stream --help` no longer offers an `h264` format it rejects, and `baguette logs --help` lists the levels (`default`, `info`, `debug`) and styles (including `ndjson`) it actually accepts.
 
