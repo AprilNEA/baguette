@@ -19,7 +19,7 @@ For releases prior to this changelog, see the
 - Docs reorganised: a short README, one guide per feature under `docs/features/<name>/`, a generated command reference in `docs/commands.md`, and `docs/wire.md` for the gesture JSON. Several examples that never ran are fixed.
 
 ### Added
-- `baguette screenshot --metadata-output` writes a JSON sidecar with the captured frame's actual pixel sizes and crop or letterbox placement. → [docs](docs/features/screenshot/geometry.md)
+- `baguette screenshot --metadata-output` writes a JSON sidecar with the captured frame's actual pixel sizes and crop or letterbox placement. → [docs](docs/features/screenshot/geometry.md) ([#91](https://github.com/tddworks/baguette/pull/91))
 
 ---
 
