@@ -11,6 +11,7 @@ For releases prior to this changelog, see the
 ## [Unreleased]
 
 ### Fixed
+- `--device-set` now reaches display enumeration; stalled probes time out and failed display resolution retains `simctl` diagnostics. → [docs](docs/features/companion-screens/README.md#gotchas)
 - `baguette stream` no longer crashes on startup and now releases capture resources when stopped by Ctrl-C or SIGTERM.
 - `baguette stream --help` no longer offers an `h264` format it rejects, and `baguette logs --help` lists the levels (`default`, `info`, `debug`) and styles (including `ndjson`) it actually accepts.
 
