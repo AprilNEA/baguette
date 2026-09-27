@@ -77,6 +77,9 @@ fresh on `touch1-down`, reused through `touch1-up`.
 
 ## Gotchas
 
+- **Input success confirms transmission, not app handling.** A transport timeout
+  reports failure with an unknown delivery outcome; check the app before retrying.
+  See [dispatch semantics](design.md#5-dispatch) for the per-message wait and cleanup.
 - **Edges are physical, not visual, when rotated.** A CLI / wire caller passing
   `edge: bottom` while the device is rotated will *not* fire the home gesture.
   Send the orientation-appropriate edge for a visual-bottom drag: `portrait` →

@@ -107,9 +107,28 @@ the produced bytes — see the `--compare-with-mouse` flag on the
 ### 5. Dispatch
 
 `SimDeviceLegacyHIDClient.send(message:freeWhenDone:completionQueue:completion:)`
-— the same selector the button code already uses for home / lock.
-Same-channel dispatch; the dispatch itself is not the hard part,
-the message contents are.
+queues the actual Mach send asynchronously. Returning from that method does not
+mean the message has been sent. A one-shot CLI that exits immediately can stop
+before its final touch-up leaves the process.
+
+The shared message boundary waits for the `void (^)(NSError *nullable)`
+completion on a dedicated queue. Supplying no callback queue would select the
+main queue and deadlock synchronous input on the main thread. The callback
+confirms Mach transmission or reports its error; it does not acknowledge guest
+processing. Successful input therefore still needs an application-side check
+when verifying an interaction.
+
+The host wait is limited to five seconds per message, not per gesture. Cleanup
+messages have their own waits. A timeout reports failure with an
+unknown delivery outcome; it does not cancel queued framework work or retry the
+message. Framework ownership continues after timeout, so a late callback remains
+safe. Multi-event gestures attempt their matching releases after send failures.
+
+This contract was checked against Xcode 26.6 SimulatorKit's Objective-C metadata,
+Swift symbols and disassembly. Neither its simpler `send(message:)` overload nor
+another exported method provides synchronous sending. The framework retains its
+client until queued work ends; ordinary ARC lifetime is not the completion
+problem.
 
 ## Phases
 

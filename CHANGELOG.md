@@ -10,6 +10,9 @@ For releases prior to this changelog, see the
 
 ## [Unreleased]
 
+### Fixed
+- Input commands wait for HID transmission before reporting success or exiting; transmission errors and timeouts report failure. See [dispatch semantics](docs/features/touches/design.md#5-dispatch) ([#90](https://github.com/tddworks/baguette/pull/90)).
+
 ---
 
 ## [0.2.1] - 2026-09-27
