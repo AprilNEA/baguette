@@ -45,6 +45,12 @@ struct DeviceRenderPlan: Equatable, Sendable {
         hingeDegrees.map { HingeAngle(degrees: $0).litPanel }
     }
 
+    /// The glass layer is shaped for the inner screen and is left out when
+    /// a pose lights the cover, where it would float beside the shut book.
+    var rendersScreenGlass: Bool {
+        screenGlass && screenPanel != .primary
+    }
+
     static func build(
         model: InstalledDeviceModel,
         variants: [String: String],

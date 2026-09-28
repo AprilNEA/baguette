@@ -28,6 +28,21 @@ struct DeviceRenderPlanTests {
         }
     }
 
+    /// The glass layer is shaped for the inner screen; over a pose that
+    /// lights the cover it floated beside the shut book.
+    @Test(arguments: [(nil as Double?, true), (180, true), (90, true), (89, false), (0, false)])
+    func `screen glass composites over the inner screen only`(angle: Double?, glass: Bool) throws {
+        let plan = try DeviceRenderPlan.build(
+            model: Self.installed(fold: DeviceModelFold(
+                clip: "fold", shutTime: 5, coverMaterial: "Cover",
+                coverTextureSize: RenderDimensions(width: 100, height: 200), openPoseDegrees: 130
+            )),
+            variants: [:], rotation: .zero, outputSize: RenderDimensions(width: 300, height: 400),
+            screenGlass: true, hingeDegrees: angle
+        )
+        #expect(plan.rendersScreenGlass == glass)
+    }
+
     @Test func `an unspecified fold keeps the existing screen selection`() throws {
         #expect(try Self.foldPlan(angle: nil).screenPanel == nil)
     }

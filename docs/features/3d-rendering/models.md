@@ -155,7 +155,9 @@ baguette render-3d --screen inner-landscape.png --device iphone-duo \
 The fold angle runs from 0 (closed) to 180 (flat). Below 90 degrees the
 capture is placed on the cover; otherwise it goes on the inner display.
 Supply a capture of that panel. This explicit pose does not infer simulator
-state or reproduce hinge hysteresis.
+state or reproduce hinge hysteresis. Short of shut, the cover faces away from
+the default camera; turn the model toward it with `--rotation` (at 60°,
+`--rotation 0,60,0`).
 
 `--screen-rotation` turns the saved image counterclockwise in quarter turns;
 `--rotation` independently turns the whole model. Omitting both new flags
@@ -168,8 +170,8 @@ canvas keeps the original image's width and height, even for 90° or 270°;
 ratio-based sizes also use those original dimensions. Set `--size WIDTHxHEIGHT`
 explicitly when the rotated image should determine the canvas dimensions.
 
-On foldable models, `--screen-glass` applies only to the inner screen; it has
-no effect on the cover panel (selected by `--hinge-degrees` below 90°).
+On foldable models, `--screen-glass` applies only to the inner screen; it is
+left out when `--hinge-degrees` below 90° selects the cover panel.
 
 ## Variants
 
