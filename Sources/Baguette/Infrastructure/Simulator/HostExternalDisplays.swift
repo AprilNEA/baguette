@@ -18,13 +18,14 @@ final class HostExternalDisplays: ExternalDisplays, @unchecked Sendable {
         self.enumerateIO = enumerateIO
     }
 
-    convenience init(udid: String) {
-        self.init(enumerateIO: { try SimctlIOCapture.enumerate(udid: udid) })
+    convenience init(udid: String, deviceSetPath: String? = nil) {
+        self.init(enumerateIO: { try SimctlIOCapture.enumerate(udid: udid, deviceSetPath: deviceSetPath) })
     }
 
     var isCarPlayConnected: Bool {
         if let text = try? enumerateIO(),
-           SimctlIOEnumerate.isCarPlayConnected(text) {
+            SimctlIOEnumerate.isCarPlayConnected(text)
+        {
             return true
         }
         lock.lock()

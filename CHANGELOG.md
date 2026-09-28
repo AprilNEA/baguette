@@ -12,6 +12,7 @@ For releases prior to this changelog, see the
 
 ### Fixed
 - Input commands wait for HID transmission before reporting success or exiting; transmission errors and timeouts report failure. See [dispatch semantics](docs/features/touches/design.md#5-dispatch) ([#90](https://github.com/tddworks/baguette/pull/90)).
+- `--device-set` now reaches display enumeration; stalled probes cancel output reads on timeout and failed display resolution retains `simctl` diagnostics. → [docs](docs/features/companion-screens/README.md#gotchas) ([#92](https://github.com/tddworks/baguette/pull/92))
 
 ---
 
