@@ -19,6 +19,7 @@ import Foundation
 /// is integration-only.
 final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
     private let udid: String
+    private let deviceSetPath: String?
     private let subprocess: () -> any Subprocess
     private let tool: () -> String?
     private let xcrun: URL
@@ -30,21 +31,27 @@ final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
 
     /// One motor — one serving child — per device, however many
     /// displays and hinges ask for it.
-    nonisolated(unsafe) private static var registry: [String: GuestHingeMotor] = [:]
+    private struct DeviceKey: Hashable {
+        let deviceSetPath: String?
+        let udid: String
+    }
+    nonisolated(unsafe) private static var registry: [DeviceKey: GuestHingeMotor] = [:]
     private static let registryLock = NSLock()
 
-    static func forDevice(_ udid: String) -> GuestHingeMotor {
+    static func forDevice(_ udid: String, deviceSetPath: String? = nil) -> GuestHingeMotor {
+        let key = DeviceKey(deviceSetPath: deviceSetPath, udid: udid)
         registryLock.lock()
         defer { registryLock.unlock() }
-        if let existing = registry[udid] { return existing }
-        let made = GuestHingeMotor(udid: udid)
-        registry[udid] = made
+        if let existing = registry[key] { return existing }
+        let made = GuestHingeMotor(udid: udid, deviceSetPath: deviceSetPath)
+        registry[key] = made
         return made
     }
 
     /// `settle` waits for a sweep to play out (sleeps, in production).
     init(
         udid: String,
+        deviceSetPath: String? = nil,
         subprocess: @escaping () -> any Subprocess = { HostSubprocess() },
         tool: @escaping () -> String? = { InjectedDylibInstaller.installIfNeeded(.hingeControl) },
         xcrun: URL = URL(fileURLWithPath: "/usr/bin/xcrun"),
@@ -52,6 +59,7 @@ final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
         turnTimeout: TimeInterval = 8
     ) {
         self.udid = udid
+        self.deviceSetPath = deviceSetPath
         self.subprocess = subprocess
         self.tool = tool
         self.xcrun = xcrun
@@ -90,7 +98,7 @@ final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
         let child = subprocess()
         try child.run(
             executable: xcrun,
-            arguments: ["simctl", "spawn", udid, tool, "orientation", name],
+            arguments: spawnArguments + [tool, "orientation", name],
             onBytes: { _ in },
             onExit: { status in
                 completion.lock.lock()
@@ -111,6 +119,10 @@ final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
         }
     }
 
+    private var spawnArguments: [String] {
+        ["simctl"] + (deviceSetPath.map { ["--set", $0] } ?? []) + ["spawn", udid]
+    }
+
     /// One command line to the serving child, started if need be.
     private func send(_ line: String) throws {
         lock.lock()
@@ -127,7 +139,7 @@ final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
         let started = subprocess()
         try started.runInteractive(
             executable: xcrun,
-            arguments: ["simctl", "spawn", udid, tool, "serve"],
+            arguments: spawnArguments + [tool, "serve"],
             onBytes: { _ in },
             onExit: { [weak self] _ in
                 guard let self else { return }
