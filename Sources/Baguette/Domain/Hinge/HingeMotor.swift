@@ -16,9 +16,21 @@ protocol HingeMotor: Sendable {
     func turn(to orientation: DeviceOrientation) throws
 }
 
-enum HingeError: Error, Equatable {
+enum HingeError: Error, Equatable, CustomStringConvertible, LocalizedError {
     /// The build did not ship `HingeControl`, or it could not be installed.
     case toolMissing
     case toolFailed(status: Int32)
     case toolTimedOut
+}
+
+extension HingeError {
+    var description: String {
+        switch self {
+        case .toolMissing: "HingeControl is missing or could not be installed."
+        case .toolFailed(let status): "HingeControl exited with status \(status)."
+        case .toolTimedOut: "HingeControl timed out; the command may already have been dispatched and its outcome is unknown."
+        }
+    }
+
+    var errorDescription: String? { description }
 }

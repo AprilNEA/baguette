@@ -120,6 +120,11 @@ struct GuestHingeMotorTests {
         try motor.turn(to: .landscapeLeft)
     }
 
+    @Test func `a timeout warns that the device may already have moved`() {
+        #expect(String(describing: HingeError.toolTimedOut)
+            == "HingeControl timed out; the command may already have been dispatched and its outcome is unknown.")
+    }
+
     @Test func `a rotation that never completes is bounded and its child is killed`() {
         let (motor, captures) = make(exitStatus: nil)
         #expect(throws: HingeError.toolTimedOut) { try motor.turn(to: .portrait) }

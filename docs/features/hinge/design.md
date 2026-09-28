@@ -79,6 +79,9 @@ so a short-lived CLI cannot exit before its queued input is processed.
 The one-shot helper validates its native orientation values and exits with
 status 2 for invalid arguments or 1 for a rejected HID dispatch. The host
 waits up to eight seconds, then kills a stalled child and reports a timeout.
+A timeout means the outcome is unknown: the guest may already have dispatched
+the command. Read the device state before deciding what to do next; do not
+automatically retry.
 Diagnostic output alone is not failure. Failure to read the device's panel
 configuration is also an error; it must not select the legacy path by default.
 
