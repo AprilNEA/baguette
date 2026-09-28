@@ -1,10 +1,11 @@
-import Testing
-import Foundation
 import CoreGraphics
 import CoreVideo
-import ImageIO
+import Foundation
 import IOSurface
+import ImageIO
 import Mockable
+import Testing
+
 @testable import Baguette
 
 /// The SimulatorKit call that hands over a framebuffer is integration-
@@ -15,6 +16,73 @@ import Mockable
 /// `IOSurface` stands in for the framebuffer.
 @Suite("ScreenSnapshot")
 struct ScreenSnapshotTests {
+
+    @Test func `capture geometry records the actual even scaled frame and encoded image`() async throws {
+        let surface = try #require(makeSurface(width: 1206, height: 2622))
+        let screen = MockScreen()
+        given(screen).start(onFrame: .any).willProduce { onFrame in onFrame(surface) }
+        given(screen).stop().willReturn(())
+
+        let frame = try await ScreenSnapshot.captureWithGeometry(screen: screen, scale: 2, format: .png)
+
+        #expect(frame.geometry.framebufferPixels == RenderDimensions(width: 1206, height: 2622))
+        #expect(frame.geometry.scaledPixels == RenderDimensions(width: 604, height: 1312))
+        #expect(try decoded(frame.bytes) == CGSize(width: 604, height: 1312))
+        #expect(
+            frame.geometry.placement
+                == CapturePlacement(
+                    width: 604, height: 1312, drawX: 0, drawY: 0, drawWidth: 604, drawHeight: 1312
+                ))
+        verify(screen).stop().called(1)
+    }
+
+    @Test(arguments: [CaptureFit.contain, .cover, .stretch])
+    func `capture geometry describes the exact letterbox crop or stretch encoded`(fit: CaptureFit) async throws {
+        let surface = try #require(makeSurface(width: 120, height: 60))
+        let screen = MockScreen()
+        given(screen).start(onFrame: .any).willProduce { onFrame in onFrame(surface) }
+        given(screen).stop().willReturn(())
+
+        let frame = try await ScreenSnapshot.captureWithGeometry(
+            screen: screen, size: try CaptureSize.parse("40x80"), fit: fit, format: .png
+        )
+
+        let expected: CapturePlacement
+        switch fit {
+        case .contain:
+            expected = CapturePlacement(width: 40, height: 80, drawX: 0, drawY: 30, drawWidth: 40, drawHeight: 20)
+        case .cover:
+            expected = CapturePlacement(width: 40, height: 80, drawX: -60, drawY: 0, drawWidth: 160, drawHeight: 80)
+        case .stretch:
+            expected = CapturePlacement(width: 40, height: 80, drawX: 0, drawY: 0, drawWidth: 40, drawHeight: 80)
+        }
+        #expect(frame.geometry.placement == expected)
+        #expect(frame.geometry.framebufferPixels == RenderDimensions(width: 120, height: 60))
+        #expect(try decoded(frame.bytes) == CGSize(width: expected.width, height: expected.height))
+        let json = frame.geometry.json
+        #expect(json["imagePixels"] as? [String: Int] == ["width": 40, "height": 80])
+        #expect(
+            json["drawRectPixels"] as? [String: Int] == [
+                "x": expected.drawX, "y": expected.drawY,
+                "width": expected.drawWidth, "height": expected.drawHeight,
+            ])
+    }
+
+    @Test func `failed capture encoding still releases the screen`() async throws {
+        let surface = try #require(makeSurface(width: 120, height: 60))
+        let screen = MockScreen()
+        given(screen).start(onFrame: .any).willProduce { onFrame in onFrame(surface) }
+        given(screen).stop().willReturn(())
+
+        await #expect(throws: ScreenSnapshot.Failure.encodeFailed) {
+            _ = try await ScreenSnapshot.captureWithGeometry(
+                screen: screen,
+                size: CaptureSize(
+                    spec: "invalid", label: "Invalid", kind: .fixed(RenderDimensions(width: 0, height: 0)))
+            )
+        }
+        verify(screen).stop().called(1)
+    }
 
     @Test func `a captured frame comes back as JPEG at the screen's own size`() async throws {
         let surface = try #require(makeSurface(width: 120, height: 60))
@@ -61,6 +129,7 @@ struct ScreenSnapshotTests {
         await #expect(throws: ScreenSnapshot.Failure.timeout) {
             _ = try await ScreenSnapshot.capture(screen: screen, timeout: 0.05)
         }
+        verify(screen).stop().called(1)
     }
 
     @Test func `a screen that refuses to open surfaces its own error`() async throws {
@@ -71,6 +140,7 @@ struct ScreenSnapshotTests {
         await #expect(throws: SnapshotTestError.notBooted) {
             _ = try await ScreenSnapshot.capture(screen: screen)
         }
+        verify(screen).stop().called(1)
     }
 }
 

@@ -1,7 +1,7 @@
 import ArgumentParser
 import Foundation
 
-struct StreamCommand: ParsableCommand {
+struct StreamCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "stream",
         abstract: "Stream framebuffer to stdout (mjpeg / avcc). Reads runtime config commands from stdin."
@@ -24,42 +24,52 @@ struct StreamCommand: ParsableCommand {
     @Option(help: "Integer downscale divisor (1 = native)")
     var scale: Int = StreamConfig.default.scale
 
-    func run() {
+    func run() async throws {
         guard let streamFormat = StreamFormat(rawValue: format) else {
             log("Unknown format: \(format)")
-            Foundation.exit(1)
+            throw ExitCode.failure
         }
         let simulators = CoreSimulators(deviceSetPath: options.deviceSet)
         guard let simulator = simulators.find(udid: options.udid) else {
             log("Device \(options.udid) not found")
-            Foundation.exit(1)
+            throw ExitCode.failure
         }
         let stream = streamFormat.makeStream(
             config: StreamConfig(fps: fps, bitrateBps: bitrate, scale: scale),
             sink: StdoutSink(),
             quality: quality
         )
-        do {
-            try stream.start(on: simulator.screen())
-        } catch {
-            log("Stream start failed: \(error)")
-            Foundation.exit(1)
+        // AsyncParsableCommand runs on the cooperative executor;
+        // dispatchMain() requires the process's main thread.
+        let termination = AsyncStream<Void>.makeStream()
+        let sources = [SIGINT, SIGTERM].map { number in
+            signal(number, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: number, queue: .global())
+            source.setEventHandler { termination.continuation.finish() }
+            source.resume()
+            return source
         }
+        defer {
+            for source in sources { source.cancel() }
+            signal(SIGINT, SIG_DFL)
+            signal(SIGTERM, SIG_DFL)
+        }
+        try await Self.capture(stream, on: simulator.screen()) {
+            for await _ in termination.stream {}
+        }
+    }
 
-        // Listen for runtime control commands on stdin.
+    static func capture(
+        _ stream: any Stream,
+        on screen: any Screen,
+        until stopped: () async throws -> Void
+    ) async throws {
+        // start() can install some callbacks before reporting a failure.
+        defer { stream.stop() }
+        try stream.start(on: screen)
         let control = ControlChannel(stream: stream)
         control.start()
-
-        // Clean shutdown on Ctrl+C — GPU processes wind down.
-        signal(SIGINT, SIG_IGN)
-        let src = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
-        src.setEventHandler {
-            control.stop()
-            stream.stop()
-            Foundation.exit(0)
-        }
-        src.resume()
-
-        dispatchMain()
+        defer { control.stop() }
+        try await stopped()
     }
 }

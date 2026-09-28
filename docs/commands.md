@@ -319,13 +319,14 @@ baguette chrome composite [--udid <udid>] [--device-name <device-name>] [--panel
 Capture one frame from a simulator's screen
 
 ```
-baguette screenshot --udid <udid> [--output <output>] [--quality <quality>] [--scale <scale>] [--size <size>] [--fit <fit>] [--background <background>] [--format <format>] [--display <display>]
+baguette screenshot --udid <udid> [--output <output>] [--metadata-output <metadata-output>] [--quality <quality>] [--scale <scale>] [--size <size>] [--fit <fit>] [--background <background>] [--format <format>] [--display <display>]
 ```
 
 | Flag | Required | Default | Description |
 |---|---|---|---|
 | `--udid` | yes |  | Simulator UDID |
 | `--output` |  |  | Output file (defaults to stdout) |
+| `--metadata-output` |  |  | Write this frame's pixel geometry as JSON to a separate file |
 | `--quality` |  | `0.85` | JPEG quality (0.0 – 1.0); ignored for PNG |
 | `--scale` |  | `1` | Integer downscale divisor (1 = native) |
 | `--size` |  | `native` | Output size: WIDTHxHEIGHT, W:H, or one of: native \| appstore-6.9 \| appstore-6.5 \| appstore-ipad-13 \| square \| 16:9 \| 9:16 \| 4:3 \| 4:5 |

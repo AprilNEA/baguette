@@ -152,6 +152,12 @@ Unknown background 'chartreuse'. Expected 'transparent' or #RRGGBB
   only shape the returned image, never a running WebSocket stream (the
   stream's own `snapshot` verb, by contrast, shares its pacing).
 
+## Pixel geometry
+
+Use `--metadata-output frame.json` to write the captured frame's pixel sizes
+and crop or letterbox placement alongside the image. See
+[geometry sidecars](geometry.md) for the JSON fields and coordinate mapping.
+
 ## See also
 
 - [design.md](design.md) — the capture pipeline, why not "stream + one frame", bezel z-order, timeouts
