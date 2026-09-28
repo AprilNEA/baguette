@@ -70,7 +70,10 @@ route (`HingeMotor.turn(to:)`). Its native values are `portrait`, `pud`,
 `landscape-left`, and `landscape-right`; camel-case names such as
 `landscapeLeft` are silently ignored. The public CLI and HTTP route detect
 multiple integrated panels and use this guest route; single-panel devices
-retain the Purple event. Rotation uses a bounded one-shot helper invocation
+retain the Purple event. Native landscape labels are opposite the public
+home-button convention: public `landscape-left` sends native `landscape-right`
+(physical UIDevice value 4), and public `landscape-right` sends native
+`landscape-left` (value 3). Portrait values are unchanged. Rotation uses a bounded one-shot helper invocation
 so a short-lived CLI cannot exit before its queued input is processed.
 
 The one-shot helper validates its native orientation values and exits with

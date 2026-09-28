@@ -72,11 +72,12 @@ final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
     func turn(to orientation: DeviceOrientation) throws {
         guard let tool = tool() else { throw HingeError.toolMissing }
         let name: String
+        // Native landscape labels are opposite the public home-button convention.
         switch orientation {
         case .portrait: name = "portrait"
         case .portraitUpsideDown: name = "pud"
-        case .landscapeLeft: name = "landscape-left"
-        case .landscapeRight: name = "landscape-right"
+        case .landscapeLeft: name = "landscape-right"
+        case .landscapeRight: name = "landscape-left"
         }
         // A CLI can exit immediately after this call. Wait for the one-shot
         // helper to dispatch and finish instead of only writing to its pipe.

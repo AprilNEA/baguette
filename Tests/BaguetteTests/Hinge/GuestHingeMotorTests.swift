@@ -71,8 +71,8 @@ struct GuestHingeMotorTests {
     @Test(arguments: [
         (DeviceOrientation.portrait, "portrait"),
         (.portraitUpsideDown, "pud"),
-        (.landscapeLeft, "landscape-left"),
-        (.landscapeRight, "landscape-right"),
+        (.landscapeLeft, "landscape-right"),
+        (.landscapeRight, "landscape-left"),
     ])
     func `rotation uses the native physical orientation values and completes the guest command`(
         orientation: DeviceOrientation, native: String
@@ -81,6 +81,12 @@ struct GuestHingeMotorTests {
         try motor.turn(to: orientation)
         #expect(captures.runs == [["simctl", "spawn", "duo", "/tmp/builds/abc/HingeControl", "orientation", native]])
         #expect(captures.written.isEmpty)
+        // Measured UIDevice values for the native guest commands. The phone
+        // backend sends DeviceOrientation.rawValue directly through Purple.
+        let physicalValues: [String: UInt32] = [
+            "portrait": 1, "pud": 2, "landscape-left": 3, "landscape-right": 4,
+        ]
+        #expect(physicalValues[native] == orientation.rawValue)
     }
 
     @Test func `a rejected rotation or missing helper is not success`() {
