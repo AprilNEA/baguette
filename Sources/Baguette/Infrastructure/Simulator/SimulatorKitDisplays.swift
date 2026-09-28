@@ -88,16 +88,10 @@ enum SimctlIOCapture {
         process.standardError = pipe
         process.environment = ProcessInfo.processInfo.environment
         process.standardInput = FileHandle.nullDevice
-        let output = CapturedOutput()
+        let output = CapturedOutput(pipe.fileHandleForReading)
+        defer { output.close() }
         let exited = DispatchSemaphore(value: 0)
         let complete = DispatchGroup()
-        let queue = DispatchQueue(label: "baguette.display-enumeration")
-        let handle = pipe.fileHandleForReading
-        let reader = DispatchIO(type: .stream, fileDescriptor: handle.fileDescriptor, queue: queue) { _ in
-            // Dispatch relinquishes the descriptor only after its pending reads have stopped.
-            try? handle.close()
-        }
-        defer { reader.close(flags: .stop) }
         complete.enter()
         process.terminationHandler = { _ in
             exited.signal()
@@ -110,12 +104,15 @@ enum SimctlIOCapture {
             throw error
         }
         complete.enter()
-        reader.read(offset: 0, length: Int.max, queue: queue) { done, data, error in
-            output.append(data, error: error)
-            if done {
-                if error != 0, process.isRunning { Darwin.kill(process.processIdentifier, SIGKILL) }
-                complete.leave()
+        // A readability source, unlike DispatchIO, needs no free global-queue worker to
+        // make progress, so a host with every worker blocked still drains the pipe.
+        pipe.fileHandleForReading.readabilityHandler = { _ in
+            switch output.drain() {
+            case .more: return
+            case .failed: if process.isRunning { Darwin.kill(process.processIdentifier, SIGKILL) }
+            case .end: break
             }
+            if output.close() { complete.leave() }
         }
         guard complete.wait(timeout: .now() + timeout) == .success else {
             // A stalled simctl can ignore SIGTERM. Request termination, then bound the exit wait.
@@ -131,16 +128,48 @@ enum SimctlIOCapture {
         return text
     }
 
-    // The read callback and caller share bytes and error state under the same lock.
+    /// Owns the read end of the pipe. Reads and the close share one lock, so a
+    /// readability callback still in flight never reads a closed (or reused) descriptor.
     private final class CapturedOutput: @unchecked Sendable {
+        enum Chunk { case more, end, failed }
+
+        private let handle: FileHandle
         private let lock = NSLock()
         private var bytes = Data()
         private var readError: Int32 = 0
+        private var closed = false
 
-        func append(_ data: DispatchData?, error: Int32) {
+        init(_ handle: FileHandle) { self.handle = handle }
+
+        func drain() -> Chunk {
             lock.withLock {
-                if let data { bytes.append(contentsOf: data) }
-                if error != 0 { readError = error }
+                guard !closed else { return .end }
+                var buffer = [UInt8](repeating: 0, count: 65536)
+                while true {
+                    let count = Darwin.read(handle.fileDescriptor, &buffer, buffer.count)
+                    if count > 0 {
+                        bytes.append(contentsOf: buffer[..<count])
+                        return .more
+                    }
+                    if count == 0 { return .end }
+                    if errno == EINTR { continue }
+                    if errno == EAGAIN { return .more }
+                    readError = errno
+                    return .failed
+                }
+            }
+        }
+
+        /// Stops the readability source, then closes the descriptor. Returns `true` only
+        /// for the call that actually closed it.
+        @discardableResult
+        func close() -> Bool {
+            handle.readabilityHandler = nil
+            return lock.withLock {
+                guard !closed else { return false }
+                closed = true
+                try? handle.close()
+                return true
             }
         }
 

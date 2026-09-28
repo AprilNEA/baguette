@@ -29,6 +29,26 @@ struct SimctlIOCaptureTests {
         #expect(output.hasSuffix("end"))
     }
 
+    @Test func `enumeration finishes while every dispatch worker is blocked`() throws {
+        let script = try Script("printf ready")
+        defer { script.remove() }
+        // A loaded host (a busy `serve`, a full test run) can park every global-queue
+        // worker; the capture must not depend on one becoming free.
+        let release = DispatchSemaphore(value: 0)
+        let blockers = 128
+        let started = DispatchGroup()
+        for _ in 0..<blockers {
+            started.enter()
+            DispatchQueue.global().async {
+                started.leave()
+                release.wait()
+            }
+        }
+        defer { for _ in 0..<blockers { release.signal() } }
+        _ = started.wait(timeout: .now() + 0.5)
+        #expect(try SimctlIOCapture.enumerate(udid: "device-id", xcrun: script.url, timeout: 2) == "ready")
+    }
+
     @Test func `a child that closes output but ignores termination is killed at the deadline`() throws {
         let script = try Script("trap '' TERM; exec 1>&- 2>&-; exec /bin/sleep 30")
         defer { script.remove() }
