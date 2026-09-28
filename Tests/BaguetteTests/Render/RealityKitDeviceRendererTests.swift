@@ -15,6 +15,30 @@ struct RealityKitDeviceRendererTests {
         }
     }
 
+    /// The capture goes where the device shows it: the inner screen when
+    /// open, the cover — turned by the fold to face the camera — when shut.
+    @Test func `a saved capture lands on the cover when shut and on the inner screen when open`() throws {
+        let scratch = try Self.makeScratch()
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        let screen = try Self.screenPNG()
+        let renderer = RealityKitDeviceRenderer()
+        let open = try renderer.render(
+            plan: Self.plan(directory: scratch, file: "foldable.usda", foldable: true, hingeDegrees: 180),
+            screenImage: screen
+        )
+        let shut = try renderer.render(
+            plan: Self.plan(directory: scratch, file: "foldable.usda", foldable: true, hingeDegrees: 0),
+            screenImage: screen
+        )
+        let openBlue = try Self.bluePixels(open)
+        let shutBlue = try Self.bluePixels(shut)
+        #expect(openBlue > 200)
+        // A capture left on the covered inner screen shows only as a sliver.
+        #expect(shutBlue * 2 > openBlue)
+        // Shut, the leaf lies over the right half, so the book is narrower.
+        #expect(try Self.opaqueWidth(shut) * 4 < Self.opaqueWidth(open) * 3)
+    }
+
     @Test func `rotates an indexed PNG that already renders without rotation`() throws {
         let scratch = try Self.makeScratch()
         defer { try? FileManager.default.removeItem(at: scratch) }
@@ -100,6 +124,11 @@ private extension RealityKitDeviceRendererTests {
             atomically: true,
             encoding: .utf8
         )
+        try RealityKitRenderFixtures.foldableDeviceUSDA.write(
+            to: url.appending(path: "foldable.usda"),
+            atomically: true,
+            encoding: .utf8
+        )
         return url
     }
 
@@ -117,7 +146,8 @@ private extension RealityKitDeviceRendererTests {
         return png
     }
 
-    static func opaqueHeight(_ png: Data) throws -> Int {
+    /// RGBA bytes, rows top first.
+    static func rgba(_ png: Data) throws -> (pixels: [UInt8], width: Int, height: Int) {
         let imageSource = try #require(
             CGImageSourceCreateWithData(png as CFData, nil)
         )
@@ -135,6 +165,28 @@ private extension RealityKitDeviceRendererTests {
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ))
         context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return (pixels, width, height)
+    }
+
+    static func opaqueWidth(_ png: Data) throws -> Int {
+        let (pixels, width, height) = try rgba(png)
+        let occupied = (0..<width).filter { column in
+            (0..<height).contains { row in pixels[(row * width + column) * 4 + 3] > 8 }
+        }
+        guard let first = occupied.first, let last = occupied.last else { return 0 }
+        return last - first + 1
+    }
+
+    /// Opaque pixels showing `screenPNG()`'s blue.
+    static func bluePixels(_ png: Data) throws -> Int {
+        let (pixels, _, _) = try rgba(png)
+        return stride(from: 0, to: pixels.count, by: 4).filter { index in
+            pixels[index + 3] > 200 && pixels[index + 2] > 150 && pixels[index] < 90
+        }.count
+    }
+
+    static func opaqueHeight(_ png: Data) throws -> Int {
+        let (pixels, width, height) = try rgba(png)
         let occupiedRows = (0..<height).filter { row in
             (0..<width).contains { column in
                 pixels[(row * width + column) * 4 + 3] > 8
@@ -150,6 +202,7 @@ private extension RealityKitDeviceRendererTests {
         directory: URL,
         file: String,
         finish: String? = nil,
+        foldable: Bool = false,
         hingeDegrees: Double? = nil,
         screenRotation: ScreenRotation = .none
     ) throws -> DeviceRenderPlan {
@@ -166,7 +219,11 @@ private extension RealityKitDeviceRendererTests {
                     screenMaterial: "ScreenMaterial",
                     nativeOrientation: .portrait,
                     textureSize: RenderDimensions(width: 100, height: 200),
-                    usesScreenOverlay: false
+                    usesScreenOverlay: false,
+                    fold: foldable ? DeviceModelFold(
+                        clip: "default subtree animation", shutTime: 5, coverMaterial: "CoverMaterial",
+                        coverTextureSize: RenderDimensions(width: 100, height: 200), openPoseDegrees: 130
+                    ) : nil
                 ),
                 variantSets: finish == nil ? [] : [
                     DeviceVariantSet(
