@@ -93,6 +93,9 @@ untouched.
 - Sweeps queue behind one another. The first pose spawns the guest
   helper; later ones cost no spawn (~0.9 s round trip for Device Hub's
   0.8 s sweep).
+- `devicectl` cannot see a device in a custom `--device-set`, so there
+  `baguette hinge` reads `null`, and a move goes straight to the angle
+  asked for instead of sweeping from where the hinge was.
 
 ## See also
 

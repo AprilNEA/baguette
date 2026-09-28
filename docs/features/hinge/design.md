@@ -57,8 +57,9 @@ short-lived CLI cannot exit with its command still queued. The encoder
 reproduces Device Hub's payload byte for byte. Commands queue behind one
 another; a pose costs no spawn after the first (~0.9 s round trip for
 Device Hub's 0.8 s sweep). `SharedHinge.fold(to:over:)` starts each
-sweep from the angle last heard — or shut, as the device boots, when
-nothing has been heard — and `DevicectlHinge` reads the sweep back like
+sweep from the angle last heard — or, when nothing has been heard (a
+custom device set, which `devicectl` cannot read), at the angle asked
+for, so the hinge moves straight there — and `DevicectlHinge` reads the sweep back like
 any other, so the page, `litPanel` and the chrome all follow.
 
 A background `simctl spawn` of the tool (`&` in a subshell) once
