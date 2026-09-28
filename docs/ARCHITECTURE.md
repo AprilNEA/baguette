@@ -219,11 +219,11 @@ Thin orchestration; ArgumentParser lives here.
    `GestureRegistry.standard.parse`, gets back a `Tap` value type,
    calls `tap.execute(on: input)`.
 6. **`Tap.execute`** — calls `input.tap(at:size:duration:)`.
-7. **`IndigoHIDInput.tap`** — first call lazily warms by opening
-   `SimDeviceLegacyHIDClient` and emitting pointer + mouse service
-   primers. Builds two `IndigoMessage`s with the 9-arg
-   `IndigoHIDMessageForMouseNSEvent` (down, sleep, up), sends each via
-   `SimDeviceLegacyHIDClient.send(message:wait:true)`.
+7. **`IndigoHIDInput.tap`** — lazily opens `SimDeviceLegacyHIDClient`
+   and primes the input services. `IOHIDDigitizerDispatch` builds and patches
+   digitizer down/up messages around the requested hold duration. Each send
+   waits for its transport completion; see the
+   [dispatch contract](features/touches/design.md#5-dispatch).
 8. **SimulatorKit** — routes the messages to digitizer target `0x32`
    inside the sim. `backboardd` delivers a touch event through the
    normal iOS HID stack.
