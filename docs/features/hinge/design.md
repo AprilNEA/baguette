@@ -46,12 +46,15 @@ shape.
 So baguette ships **`HingeControl`** (`Injected/HingeControl/`), an
 iOS-Simulator *executable* — the first non-dylib under `Injected/`,
 built and staged by the same loop — which `GuestHingeMotor` starts once
-per device with `xcrun simctl spawn <udid> <HingeControl> serve` and
-keeps: it registers a service of the same shape and plays each line it
-is written on stdin (`sweep <from> <to> <ms>` at 60 Hz with Device
-Hub's ease-out, `angle <deg>`, `orientation <native-value>`). The public
-rotation command uses the same helper in one-shot mode instead. The encoder
-reproduces Device Hub's payload byte for byte. Sweeps queue behind one
+per device with `xcrun simctl spawn <udid> <HingeControl> --deadline <t>
+serve` and keeps: it registers a service of the same shape and plays each
+line it is written on stdin (`sweep <from> <to> <ms>` at 60 Hz with Device
+Hub's ease-out, `angle <deg>`, `orientation <native-value>`, `button <page>
+<usage> <ms>`), answering each with `done <status>` once played — 0
+success, 1 rejected HID dispatch, 2 invalid line. Every hinge, rotation and
+key call waits for that answer, so it returns once the guest has acted and a
+short-lived CLI cannot exit with its command still queued. The encoder
+reproduces Device Hub's payload byte for byte. Commands queue behind one
 another; a pose costs no spawn after the first (~0.9 s round trip for
 Device Hub's 0.8 s sweep). `SharedHinge.fold(to:over:)` starts each
 sweep from the angle last heard — or shut, as the device boots, when
@@ -73,22 +76,23 @@ multiple integrated panels and use this guest route; single-panel devices
 retain the Purple event. Native landscape labels are opposite the public
 home-button convention: public `landscape-left` sends native `landscape-right`
 (physical UIDevice value 4), and public `landscape-right` sends native
-`landscape-left` (value 3). Portrait values are unchanged. Rotation uses a bounded one-shot helper invocation
-so a short-lived CLI cannot exit before its queued input is processed.
+`landscape-left` (value 3). Portrait values are unchanged.
 
-The one-shot helper validates its native orientation values and exits with
-status 2 for invalid arguments or 1 for a rejected HID dispatch. The host
-waits up to eight seconds, then kills a stalled child and reports a timeout.
-A timeout means the outcome is unknown: the guest may already have dispatched
-the command. Read the device state before deciding what to do next; do not
-automatically retry.
+The host allows eight seconds beyond a command's own playing time, plus one
+second for the helper's startup line. Killing the host's `simctl spawn` child
+does not stop the guest process, which belongs to the simulator's
+`launchd_sim` and would still dispatch, so the helper prints `pid <n>` before
+it starts and a host that stops waiting kills that guest process. A helper not
+ready to act by its `--deadline` — the spawn time plus eight seconds — exits 3
+without acting, which covers one that had not started when the host gave up.
+A timeout therefore means the command was delivered before the deadline or
+never will be: read the device state once, then decide; do not retry blindly.
 Diagnostic output alone is not failure. Failure to read the device's panel
 configuration is also an error; it must not select the legacy path by default.
 
 Physical orientation can differ from an app's interface orientation. The
-browser's model roll is a separate presentation transform. Rotation can run
-while a hinge sweep is in progress; callers that need a specific sequence
-must wait for each operation before starting the next.
+browser's model roll is a separate presentation transform. Rotation queues
+behind a sweep in progress on the same helper.
 
 ## Reading the hinge back
 

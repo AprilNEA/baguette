@@ -2,32 +2,44 @@ import Foundation
 
 /// `HingeMotor` — and `DeviceKeys` — that keeps `HingeControl serve`
 /// running inside the guest (`xcrun simctl spawn <udid> <HingeControl>
-/// serve`) and writes each command to it: `sweep <from> <to> <ms>`,
-/// `button <page> <usage> <ms>`. Rotation uses a bounded one-shot child.
+/// --deadline <t> serve`) and writes each command to it: `sweep <from>
+/// <to> <ms>`, `orientation <native-value>`, `button <page> <usage> <ms>`.
 ///
 /// The tool registers a HID service shaped like dtuhidd's `avpCustom`
 /// and dispatches the pose events Device Hub sends (see
 /// `Injected/HingeControl/Sources/HingeControl.m`); the runtime folds,
 /// SpringBoard swaps panels, and `DevicectlHinge` reads the sweep back
-/// like any other. Kept rather than spawned per sweep: a spawn is most
-/// of a second, and the service stays registered between poses. Sweeps
-/// are played one at a time — a pick during a sweep queues behind it —
-/// and the call returns once the sweep has had its time.
+/// like any other. Kept rather than spawned per command: a spawn is most
+/// of a second, and the service stays registered between poses. Commands
+/// are played one at a time — a pick during a sweep queues behind it.
 ///
-/// The orchestration — tool lookup, argv, the write, restart after
-/// exit — is unit-covered through `MockSubprocess`; `HostSubprocess`
-/// is integration-only.
+/// The tool answers each command with `done <status>` once played, so a
+/// call returns when the guest has acted and a one-shot CLI cannot exit
+/// with its command still queued. A command not answered within the
+/// allowance stops the tool: its guest process is killed by the pid it
+/// printed at startup, and a tool that had not started refuses to act past
+/// its `--deadline`. A timeout therefore means the command was delivered
+/// before the deadline or never will be.
+///
+/// The orchestration — tool lookup, argv, the write, the answer, stopping
+/// and restarting the tool — is unit-covered through `MockSubprocess`;
+/// `HostSubprocess` is integration-only.
 final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
     private let udid: String
     private let deviceSetPath: String?
     private let subprocess: () -> any Subprocess
     private let tool: () -> String?
     private let xcrun: URL
-    private let turnTimeout: TimeInterval
-    private let settle: (TimeInterval) -> Void
+    private let helperTimeout: TimeInterval
+    private let now: () -> Date
+    private let stopGuest: (Int32) -> Void
     private let lock = NSLock()
-    private var child: (any Subprocess)?
-    private var generation = 0
+    private let commands = NSLock()
+    private var helper: Helper?
+
+    /// How long past the helper's deadline the host keeps waiting, so the
+    /// pid of a helper that started just before it has arrived.
+    static let answerGrace: TimeInterval = 1
 
     /// One motor — one serving child — per device, however many
     /// displays and hinges ask for it.
@@ -48,37 +60,37 @@ final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
         return made
     }
 
-    /// `settle` waits for a sweep to play out (sleeps, in production).
+    /// `helperTimeout` bounds a tool's start and each command beyond its
+    /// own playing time; `stopGuest` kills a guest process by pid.
     init(
         udid: String,
         deviceSetPath: String? = nil,
         subprocess: @escaping () -> any Subprocess = { HostSubprocess() },
         tool: @escaping () -> String? = { InjectedDylibInstaller.installIfNeeded(.hingeControl) },
         xcrun: URL = URL(fileURLWithPath: "/usr/bin/xcrun"),
-        settle: @escaping (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) },
-        turnTimeout: TimeInterval = 8
+        helperTimeout: TimeInterval = 8,
+        now: @escaping () -> Date = { Date() },
+        stopGuest: @escaping (Int32) -> Void = { _ = Darwin.kill($0, SIGKILL) }
     ) {
         self.udid = udid
         self.deviceSetPath = deviceSetPath
         self.subprocess = subprocess
         self.tool = tool
         self.xcrun = xcrun
-        self.settle = settle
-        self.turnTimeout = turnTimeout
+        self.helperTimeout = helperTimeout
+        self.now = now
+        self.stopGuest = stopGuest
     }
 
     func fold(from: Double, to: Double, over duration: TimeInterval) throws {
-        try send("sweep \(Self.number(from)) \(Self.number(to)) \(Self.number(duration * 1000))")
-        settle(duration + 0.05)
+        try send("sweep \(Self.number(from)) \(Self.number(to)) \(Self.number(duration * 1000))", playing: duration)
     }
 
     func press(_ usage: HIDUsage, hold: TimeInterval) throws {
-        try send("button \(usage.page) \(usage.usage) \(Self.number(hold * 1000))")
-        settle(hold + 0.05)
+        try send("button \(usage.page) \(usage.usage) \(Self.number(hold * 1000))", playing: hold)
     }
 
     func turn(to orientation: DeviceOrientation) throws {
-        guard let tool = tool() else { throw HingeError.toolMissing }
         let name: String
         // Native landscape labels are opposite the public home-button convention.
         switch orientation {
@@ -87,76 +99,143 @@ final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
         case .landscapeLeft: name = "landscape-right"
         case .landscapeRight: name = "landscape-left"
         }
-        // A CLI can exit immediately after this call. Wait for the one-shot
-        // helper to dispatch and finish instead of only writing to its pipe.
-        final class Completion: @unchecked Sendable {
-            let lock = NSLock()
-            let done = DispatchSemaphore(value: 0)
-            var status: Int32?
-        }
-        let completion = Completion()
-        let child = subprocess()
-        try child.run(
-            executable: xcrun,
-            arguments: spawnArguments + [tool, "orientation", name],
-            onBytes: { _ in },
-            onExit: { status in
-                completion.lock.lock()
-                completion.status = status
-                completion.lock.unlock()
-                completion.done.signal()
-            }
-        )
-        guard completion.done.wait(timeout: .now() + turnTimeout) == .success else {
-            child.kill()
-            throw HingeError.toolTimedOut
-        }
-        completion.lock.lock()
-        let status = completion.status ?? -1
-        completion.lock.unlock()
-        guard status == 0 else {
-            throw HingeError.toolFailed(status: status)
-        }
+        try send("orientation \(name)", playing: 0)
     }
 
     private var spawnArguments: [String] {
         ["simctl"] + (deviceSetPath.map { ["--set", $0] } ?? []) + ["spawn", udid]
     }
 
-    /// One command line to the serving child, started if need be.
-    private func send(_ line: String) throws {
-        lock.lock()
-        defer { lock.unlock() }
-        let child = try serving()
-        try child.write(Data((line + "\n").utf8))
+    /// One command to the serving child, started if need be; returns once
+    /// the child has answered it.
+    private func send(_ line: String, playing duration: TimeInterval) throws {
+        commands.lock()
+        defer { commands.unlock() }
+        let helper = try serving()
+        do {
+            try helper.process.write(Data((line + "\n").utf8))
+        } catch {
+            abandon(helper)
+            throw error
+        }
+        switch helper.answer(within: duration + helperTimeout + Self.answerGrace) {
+        case .done(0):
+            return
+        case .done(let status), .exited(let status):
+            throw HingeError.toolFailed(status: status)
+        case .silent:
+            abandon(helper)
+            throw HingeError.toolTimedOut
+        }
     }
 
-    private func serving() throws -> any Subprocess {
-        if let child { return child }
+    private func serving() throws -> Helper {
+        lock.lock()
+        defer { lock.unlock() }
+        if let helper { return helper }
         guard let tool = tool() else { throw HingeError.toolMissing }
-        generation += 1
-        let mine = generation
-        let started = subprocess()
-        try started.runInteractive(
+        let started = Helper(process: subprocess())
+        let deadline = now().timeIntervalSince1970 + helperTimeout
+        try started.process.runInteractive(
             executable: xcrun,
-            arguments: spawnArguments + [tool, "serve"],
-            onBytes: { _ in },
-            onExit: { [weak self] _ in
-                guard let self else { return }
+            arguments: spawnArguments + [tool, "--deadline", Self.number(deadline), "serve"],
+            onBytes: { [weak started] in started?.receive($0) },
+            onExit: { [weak self, weak started] status in
+                started?.exited(status)
+                guard let self, let started else { return }
                 self.lock.lock()
-                if self.generation == mine { self.child = nil }
+                if self.helper === started { self.helper = nil }
                 self.lock.unlock()
             }
         )
-        child = started
-        // The service needs a moment to be seen by the event system
-        // before its first event lands.
-        settle(0.15)
+        helper = started
         return started
+    }
+
+    /// Stop a child that stopped answering, guest process first.
+    private func abandon(_ helper: Helper) {
+        if let pid = helper.pid { stopGuest(pid) }
+        helper.process.kill()
+        lock.lock()
+        if self.helper === helper { self.helper = nil }
+        lock.unlock()
     }
 
     /// Whole numbers print without a fraction, for a line that reads well.
     private static func number(_ value: Double) -> String {
         value == value.rounded() ? String(Int(value)) : String(value)
+    }
+
+    /// One serving child and what it has said: its guest pid, then one
+    /// `done <status>` per command. Other output is diagnostics.
+    private final class Helper: @unchecked Sendable {
+        enum Answer: Equatable {
+            case done(Int32)
+            case exited(Int32)
+            case silent
+        }
+
+        let process: any Subprocess
+        private let lock = NSLock()
+        private let arrived = DispatchSemaphore(value: 0)
+        private var output = LineBuffer()
+        private var answers: [Int32] = []
+        private var exitStatus: Int32?
+        private var guestPID: Int32?
+
+        init(process: any Subprocess) {
+            self.process = process
+        }
+
+        var pid: Int32? {
+            lock.lock()
+            defer { lock.unlock() }
+            return guestPID
+        }
+
+        func receive(_ bytes: Data) {
+            lock.lock()
+            var count = 0
+            for line in output.append(bytes) {
+                let words = line.split(separator: " ")
+                guard words.count == 2, let value = Int32(words[1]) else { continue }
+                if words[0] == "pid", value > 1 { guestPID = value }
+                if words[0] == "done" { answers.append(value); count += 1 }
+            }
+            lock.unlock()
+            for _ in 0..<count { arrived.signal() }
+        }
+
+        func exited(_ status: Int32) {
+            lock.lock()
+            exitStatus = status
+            lock.unlock()
+            arrived.signal()
+        }
+
+        /// The next answer, the exit that ended the child first, or
+        /// `.silent` when neither came within `seconds`.
+        func answer(within seconds: TimeInterval) -> Answer {
+            let deadline = DispatchTime.now() + seconds
+            while true {
+                lock.lock()
+                if !answers.isEmpty {
+                    let status = answers.removeFirst()
+                    lock.unlock()
+                    return .done(status)
+                }
+                if let exitStatus {
+                    lock.unlock()
+                    return .exited(exitStatus)
+                }
+                lock.unlock()
+                if arrived.wait(timeout: deadline) == .timedOut {
+                    lock.lock()
+                    defer { lock.unlock() }
+                    if !answers.isEmpty { return .done(answers.removeFirst()) }
+                    return exitStatus.map { .exited($0) } ?? .silent
+                }
+            }
+        }
     }
 }

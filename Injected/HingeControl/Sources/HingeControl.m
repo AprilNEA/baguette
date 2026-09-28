@@ -35,10 +35,16 @@
 //   HingeControl orientation <portrait|pud|landscape-left|landscape-right>
 //   HingeControl button <usagePage> <usage> <milliseconds>
 //   HingeControl serve        — the same verbs, one per line on stdin,
-//                               until EOF; baguette keeps one of these
-//                               per device so a pose costs no spawn.
+//                               until EOF, each answered `done <status>`;
+//                               baguette keeps one of these per device so
+//                               a pose costs no spawn.
+//
+// Any verb may follow `--deadline <unix-seconds>`: past it, a helper not yet
+// ready to act exits 3 without acting. A helper prints `pid <n>` before it
+// starts, so its owner can stop it after a timeout.
 #import <Foundation/Foundation.h>
 #import "HingeOrientation.h"
+#import "HingeProtocol.h"
 #import <dlfcn.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -107,12 +113,27 @@ static NSData *orientationPayload(const char *value) {
 
 int main(int argc, char **argv) {
   @autoreleasepool {
-    if (argc < 2) { fprintf(stderr, "usage: HingeControl angle <deg> | sweep <from> <to> <ms> | orientation <portrait|pud|landscape-left|landscape-right> | button <page> <usage> <ms>\n"); return 2; }
-    if (strcmp(argv[1], "orientation") == 0 &&
-        (argc != 3 || !isHingeOrientation(@(argv[2])))) {
+    int first = 1;
+    double deadline = INFINITY;
+    if (argc > 1 && strcmp(argv[1], "--deadline") == 0) {
+      if (argc < 3 || !parseHingeDeadline(argv[2], &deadline)) {
+        fprintf(stderr, "--deadline requires a Unix time in seconds\n");
+        return 2;
+      }
+      first = 3;
+    }
+    if (argc - first < 1) { fprintf(stderr, "usage: HingeControl [--deadline <unix-seconds>] angle <deg> | sweep <from> <to> <ms> | orientation <portrait|pud|landscape-left|landscape-right> | button <page> <usage> <ms> | serve\n"); return 2; }
+    if (strcmp(argv[first], "orientation") == 0 &&
+        (argc - first != 2 || !isHingeOrientation(@(argv[first + 1])))) {
       fprintf(stderr, "orientation requires portrait, pud, landscape-left or landscape-right\n");
       return 2;
     }
+    if (hingeDeadlinePassed(deadline)) {
+      fprintf(stderr, "deadline passed; nothing done\n");
+      return HingeDeadlinePassedStatus;
+    }
+    printf("pid %d\n", getpid());
+    fflush(stdout);
     dlopen("/System/Library/PrivateFrameworks/HID.framework/HID", RTLD_NOW);
     void *iokit = dlopen("/System/Library/Frameworks/IOKit.framework/IOKit", RTLD_NOW);
     IOHIDEventCreateVendorDefinedEvent = dlsym(iokit, "IOHIDEventCreateVendorDefinedEvent");
@@ -143,6 +164,12 @@ int main(int argc, char **argv) {
     id buttons = serviceOf(0x0B, 0x01, @"baguette HingeControl buttons", YES);
     if (!service || !buttons) { fprintf(stderr, "HID service did not activate\n"); return 1; }
     usleep(300 * 1000);   // let the event system enumerate them
+    if (hingeDeadlinePassed(deadline)) {
+      ((void (*)(id, SEL))objc_msgSend)(service, sel_registerName("cancel"));
+      ((void (*)(id, SEL))objc_msgSend)(buttons, sel_registerName("cancel"));
+      fprintf(stderr, "deadline passed before the helper was ready; nothing done\n");
+      return HingeDeadlinePassedStatus;
+    }
 
     BOOL (*dispatch)(id, SEL, id) = (BOOL (*)(id, SEL, id))objc_msgSend;
     // One key, down then up, as Device Hub's buttons press it.
@@ -190,21 +217,11 @@ int main(int argc, char **argv) {
       return 0;
     };
     NSMutableArray<NSString *> *words = [NSMutableArray array];
-    for (int i = 1; i < argc; i++) [words addObject:[NSString stringWithUTF8String:argv[i]]];
+    for (int i = first; i < argc; i++) [words addObject:[NSString stringWithUTF8String:argv[i]]];
     int status = 0;
     if ([words.firstObject isEqualToString:@"serve"]) {
       // Commands line by line until stdin closes — the owner's exit.
-      char *line = NULL; size_t cap = 0; ssize_t n;
-      while ((n = getline(&line, &cap, stdin)) > 0) {
-        NSString *text = [[NSString stringWithUTF8String:line]
-          stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        NSArray<NSString *> *parts = [text componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-        if (text.length) {
-          int result = perform(parts);
-          if (result) fprintf(stderr, "%s: %s\n", result == 2 ? "bad line" : "dispatch failed", text.UTF8String);
-        }
-      }
-      free(line);
+      serveHingeCommands(stdin, stdout, perform);
     } else {
       status = perform(words);
       if (status) fprintf(stderr, "%s\n", status == 2 ? "bad arguments" : "dispatch failed");

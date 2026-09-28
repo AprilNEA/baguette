@@ -12,7 +12,8 @@ protocol HingeMotor: Sendable {
     func fold(from: Double, to: Double, over duration: TimeInterval) throws
 
     /// Turn the device to a physical orientation through the same
-    /// channel Device Hub's rotate button uses.
+    /// channel Device Hub's rotate button uses. Returns when the guest
+    /// has dispatched it.
     func turn(to orientation: DeviceOrientation) throws
 }
 
@@ -28,7 +29,7 @@ extension HingeError {
         switch self {
         case .toolMissing: "HingeControl is missing or could not be installed."
         case .toolFailed(let status): "HingeControl exited with status \(status)."
-        case .toolTimedOut: "HingeControl timed out; the command may already have been dispatched and its outcome is unknown."
+        case .toolTimedOut: "HingeControl did not answer in time; the command may have been delivered, but the stopped helper cannot deliver it later."
         }
     }
 
