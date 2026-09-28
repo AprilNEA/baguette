@@ -41,6 +41,9 @@ final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
     /// pid of a helper that started just before it has arrived.
     static let answerGrace: TimeInterval = 1
 
+    /// `HingeControl`'s exit status when it started after its deadline.
+    private static let startedLateStatus: Int32 = 3
+
     /// One motor — one serving child — per device, however many
     /// displays and hinges ask for it.
     private struct DeviceKey: Hashable {
@@ -121,6 +124,8 @@ final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
         switch helper.answer(within: duration + helperTimeout + Self.answerGrace) {
         case .done(0):
             return
+        case .exited(Self.startedLateStatus):
+            throw HingeError.toolStartedLate
         case .done(let status), .exited(let status):
             throw HingeError.toolFailed(status: status)
         case .silent:

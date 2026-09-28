@@ -22,6 +22,8 @@ enum HingeError: Error, Equatable, CustomStringConvertible, LocalizedError {
     case toolMissing
     case toolFailed(status: Int32)
     case toolTimedOut
+    /// The helper started after its deadline and did nothing.
+    case toolStartedLate
 }
 
 extension HingeError {
@@ -30,6 +32,7 @@ extension HingeError {
         case .toolMissing: "HingeControl is missing or could not be installed."
         case .toolFailed(let status): "HingeControl exited with status \(status)."
         case .toolTimedOut: "HingeControl did not answer in time; the command may have been delivered, but the stopped helper cannot deliver it later."
+        case .toolStartedLate: "HingeControl started after its deadline and did nothing; the command was not delivered."
         }
     }
 

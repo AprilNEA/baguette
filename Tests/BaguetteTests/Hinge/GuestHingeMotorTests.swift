@@ -156,6 +156,17 @@ struct GuestHingeMotorTests {
         #expect(guest.runs.count == 2)
     }
 
+    /// Under load a spawn can outlast the helper's deadline; it then exits
+    /// 3 having done nothing, which is a definite failure, not a timeout.
+    @Test func `a helper that started after its deadline reports that nothing was delivered`() {
+        let (motor, guest) = make()
+        guest.answer = { _ in [] }
+        guest.exitOnWrite = 3
+        #expect(throws: HingeError.toolStartedLate) { try motor.turn(to: .portraitUpsideDown) }
+        #expect(String(describing: HingeError.toolStartedLate)
+            == "HingeControl started after its deadline and did nothing; the command was not delivered.")
+    }
+
     @Test func `a timeout says the stopped helper cannot act later`() {
         #expect(String(describing: HingeError.toolTimedOut)
             == "HingeControl did not answer in time; the command may have been delivered, but the stopped helper cannot deliver it later.")
