@@ -1,9 +1,10 @@
 import ArgumentParser
+import Darwin
 import Foundation
 
 /// `baguette screenshot --udid <UDID> [--output path] [--quality N]
 /// [--scale N] [--size SPEC] [--fit contain|cover|stretch]
-/// [--background transparent|#RRGGBB] [--format png|jpg]`
+/// [--background transparent|#RRGGBB] [--format png|jpg] [--metadata-output path]`
 ///
 /// Captures one frame from the simulator's framebuffer. Mirrors the
 /// `GET /simulators/<UDID>/screenshot.jpg` endpoint so the same helper
@@ -25,15 +26,19 @@ struct ScreenshotCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Output file (defaults to stdout)")
     var output: String?
 
+    @Option(help: "Write this frame's pixel geometry as JSON to a separate file")
+    var metadataOutput: String?
+
     @Option(help: "JPEG quality (0.0 – 1.0); ignored for PNG")
     var quality: Double = 0.85
 
     @Option(help: "Integer downscale divisor (1 = native)")
     var scale: Int = 1
 
-    @Option(help: ArgumentHelp(
-        "Output size: WIDTHxHEIGHT, W:H, or one of: \(CaptureSize.presetList)"
-    ))
+    @Option(
+        help: ArgumentHelp(
+            "Output size: WIDTHxHEIGHT, W:H, or one of: \(CaptureSize.presetList)"
+        ))
     var size: String = "native"
 
     @Option(help: "How the frame fills the size: \(CaptureFit.allCases.map(\.rawValue).joined(separator: ", "))")
@@ -62,6 +67,7 @@ struct ScreenshotCommand: AsyncParsableCommand {
     /// `CaptureSize.parse` is already case-insensitive; `--fit` and
     /// `--background` are trimmed and lowercased here so they are too.
     mutating func validate() throws {
+        try validateOutputPaths()
         do {
             _ = try StreamDisplayPlan.from(cliFlag: display)
         } catch let error as DisplayFlagError {
@@ -112,7 +118,7 @@ struct ScreenshotCommand: AsyncParsableCommand {
             log(error.message)
             throw ExitCode.failure
         }
-        let bytes = try await ScreenSnapshot.capture(
+        let frame = try await ScreenSnapshot.captureWithGeometry(
             screen: bound.screen,
             quality: quality,
             scale: max(1, scale),
@@ -124,10 +130,56 @@ struct ScreenshotCommand: AsyncParsableCommand {
                 output: output
             )
         )
+        try write(frame)
+    }
+
+    func write(_ frame: ScreenSnapshot.Frame, stdout: FileHandle = .standardOutput) throws {
+        try validateOutputPaths(stdout: stdout)
         if let output {
-            try bytes.write(to: URL(fileURLWithPath: output))
+            try frame.bytes.write(to: URL(fileURLWithPath: output))
         } else {
-            try FileHandle.standardOutput.write(contentsOf: bytes)
+            try stdout.write(contentsOf: frame.bytes)
+        }
+        if let metadataOutput {
+            // The newly created image also catches aliases on case-insensitive volumes.
+            try validateOutputPaths(stdout: stdout)
+            let metadata = try JSONSerialization.data(
+                withJSONObject: frame.geometry.json, options: [.prettyPrinted, .sortedKeys])
+            try metadata.write(to: URL(fileURLWithPath: metadataOutput), options: .atomic)
+        }
+    }
+
+    private func validateOutputPaths(stdout: FileHandle = .standardOutput) throws {
+        guard let metadataOutput else { return }
+        let metadata = URL(fileURLWithPath: metadataOutput).standardizedFileURL.resolvingSymlinksInPath()
+        let collision = ValidationError("Image output and --metadata-output must name different files")
+        guard let output else {
+            var imageInfo = stat()
+            guard fstat(stdout.fileDescriptor, &imageInfo) == 0 else {
+                throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+            }
+            var metadataInfo = stat()
+            guard stat(metadata.path, &metadataInfo) == 0 else {
+                let code = errno
+                if code == ENOENT { return }
+                throw NSError(domain: NSPOSIXErrorDomain, code: Int(code))
+            }
+            if imageInfo.st_dev == metadataInfo.st_dev, imageInfo.st_ino == metadataInfo.st_ino {
+                throw collision
+            }
+            return
+        }
+        let image = URL(fileURLWithPath: output).standardizedFileURL.resolvingSymlinksInPath()
+        guard image != metadata else { throw collision }
+        let files = FileManager.default
+        if files.fileExists(atPath: image.path), files.fileExists(atPath: metadata.path) {
+            let imageAttributes = try files.attributesOfItem(atPath: image.path)
+            let metadataAttributes = try files.attributesOfItem(atPath: metadata.path)
+            if imageAttributes[.systemNumber] as? NSNumber == metadataAttributes[.systemNumber] as? NSNumber,
+                imageAttributes[.systemFileNumber] as? NSNumber == metadataAttributes[.systemFileNumber] as? NSNumber
+            {
+                throw collision
+            }
         }
     }
 }
