@@ -10,7 +10,7 @@ struct SimulatorOrientationTests {
             isFoldable: { throw HingeError.toolMissing },
             motor: MockHingeMotor(), standard: MockOrientation()
         )
-        #expect(!orientation.set(.portrait))
+        #expect(orientation.set(.portrait) == .rejected)
     }
 
     @Test(arguments: DeviceOrientation.allCases)
@@ -20,18 +20,18 @@ struct SimulatorOrientationTests {
         let orientation = SimulatorOrientation(
             isFoldable: { true }, motor: motor, standard: MockOrientation()
         )
-        #expect(orientation.set(target))
+        #expect(orientation.set(target) == .delivered)
     }
 
     @Test func `ordinary devices retain the legacy orientation result`() {
         let standard = MockOrientation()
-        given(standard).set(.value(.landscapeLeft)).willReturn(true)
-        given(standard).set(.value(.portrait)).willReturn(false)
+        given(standard).set(.value(.landscapeLeft)).willReturn(.delivered)
+        given(standard).set(.value(.portrait)).willReturn(.rejected)
         let orientation = SimulatorOrientation(
             isFoldable: { false }, motor: MockHingeMotor(), standard: standard
         )
-        #expect(orientation.set(.landscapeLeft))
-        #expect(!orientation.set(.portrait))
+        #expect(orientation.set(.landscapeLeft) == .delivered)
+        #expect(orientation.set(.portrait) == .rejected)
     }
 
     @Test func `failed foldable dispatch is not replaced by a misleading legacy success`() {
@@ -40,6 +40,17 @@ struct SimulatorOrientationTests {
         let orientation = SimulatorOrientation(
             isFoldable: { true }, motor: motor, standard: MockOrientation()
         )
-        #expect(!orientation.set(.portrait))
+        #expect(orientation.set(.portrait) == .rejected)
+    }
+
+    /// The helper was stopped after its deadline: the rotation may have
+    /// landed, and will not land later. Neither success nor rejection.
+    @Test func `a foldable helper timeout is unconfirmed rather than rejected`() {
+        let motor = MockHingeMotor()
+        given(motor).turn(to: .any).willThrow(HingeError.toolTimedOut)
+        let orientation = SimulatorOrientation(
+            isFoldable: { true }, motor: motor, standard: MockOrientation()
+        )
+        #expect(orientation.set(.landscapeLeft) == .unconfirmed)
     }
 }

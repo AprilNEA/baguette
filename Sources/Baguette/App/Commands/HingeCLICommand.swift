@@ -49,6 +49,9 @@ struct HingeCLICommand: ParsableCommand {
         }
         do {
             try simulator.hinge().fold(to: command.degrees, over: command.duration)
+        } catch HingeError.toolTimedOut {
+            log("Hinge move unconfirmed: \(HingeError.toolTimedOut) Read the hinge before retrying.")
+            Foundation.exit(3)
         } catch {
             log("Hinge could not be driven: \(error)")
             Foundation.exit(1)

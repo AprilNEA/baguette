@@ -54,7 +54,7 @@ struct PurpleEventOrientationTests {
         let result = autoreleasepool { orientation.set(.portrait) }
 
         withExtendedLifetime(device) {
-            #expect(result == false)
+            #expect(result == .rejected)
         }
     }
 

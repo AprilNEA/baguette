@@ -227,6 +227,11 @@ struct Server: Sendable {
                     "orientation change failed (device configuration, event port or guest pose helper unavailable)",
                     status: .internalServerError
                 )
+            case .unconfirmed:
+                return errorJSON(
+                    "orientation change unconfirmed: the guest pose helper timed out; read the device state before retrying",
+                    status: .gatewayTimeout
+                )
             }
         }
 
@@ -570,6 +575,11 @@ struct Server: Sendable {
                 return errorJSON("unknown udid: \(Self.udidParam(r))", status: .notFound)
             case .failed(let error):
                 return errorJSON("hinge could not be driven: \(error)", status: .internalServerError)
+            case .unconfirmed:
+                return errorJSON(
+                    "hinge move unconfirmed: the guest pose helper timed out; read the hinge before retrying",
+                    status: .gatewayTimeout
+                )
             }
         }
         // Chrome / bezel — DeviceKit-sourced layout + rasterized PNG.
@@ -977,6 +987,7 @@ struct Server: Sendable {
         case invalidValue
         case unknownDevice
         case dispatchFailed
+        case unconfirmed
     }
 
     /// Pure parse + dispatch: validate `value`, look up the
@@ -995,7 +1006,11 @@ struct Server: Sendable {
         guard !udid.isEmpty, let sim = simulators.find(udid: udid) else {
             return .unknownDevice
         }
-        return sim.orientation().set(orientation) ? .ok : .dispatchFailed
+        switch sim.orientation().set(orientation) {
+        case .delivered: return .ok
+        case .rejected: return .dispatchFailed
+        case .unconfirmed: return .unconfirmed
+        }
     }
 
     /// Outcome of `applyShake` — one case per HTTP-status branch the
@@ -1549,6 +1564,8 @@ struct Server: Sendable {
         case invalid(HingeCommandError)
         case unknownDevice
         case failed(HingeError)
+        /// The helper timed out and was stopped; the move may have landed.
+        case unconfirmed
     }
 
     /// Pure dispatch for `POST /simulators/:udid/hinge` and the 3D
@@ -1572,6 +1589,8 @@ struct Server: Sendable {
         do {
             try sim.hinge().fold(to: command.degrees, over: command.duration)
             return .ok
+        } catch HingeError.toolTimedOut {
+            return .unconfirmed
         } catch let error as HingeError {
             return .failed(error)
         } catch {

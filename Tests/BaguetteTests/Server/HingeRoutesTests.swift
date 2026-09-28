@@ -118,4 +118,13 @@ struct HingeDriveRoutesTests {
         #expect(Server.driveHinge(udid: "U", pose: nil, angle: "90", duration: nil, simulators: host)
             == .failed(HingeError.toolMissing))
     }
+
+    @Test func `a helper that timed out leaves the move unconfirmed`() {
+        let host = MockSimulators(), sim = MockSimulator(), hinge = MockHinge()
+        given(host).find(udid: .value("U")).willReturn(sim)
+        given(sim).hinge().willReturn(hinge)
+        given(hinge).fold(to: .any, over: .any).willThrow(HingeError.toolTimedOut)
+
+        #expect(Server.driveHinge(udid: "U", pose: "flat", angle: nil, duration: nil, simulators: host) == .unconfirmed)
+    }
 }

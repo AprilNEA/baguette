@@ -34,7 +34,8 @@ GET  /simulators/<udid>/hinge
 The `POST` blocks for the sweep and answers `{"ok":true}`; `400` for a
 pose that is not `closed`/`open`/`flat`, an angle off 0–180 or a
 negative duration; `404` for an unknown udid; `500` when the device
-could not be driven (no `HingeControl` shipped, guest refused). A phone
+could not be driven (no `HingeControl` shipped, guest refused); `504`
+when the guest helper timed out, so the fold may have landed. A phone
 answers the `GET` with `foldable:false` and has nothing to drive.
 
 On the 3D socket the picker sends:
@@ -66,8 +67,11 @@ baguette orientation --udid <UDID> landscape-right
 The command and HTTP orientation route rotate the physical device. An app
 can keep its interface locked, and the inner display has different axes
 from the device, so successful dispatch need not change the app's layout.
-The command reports failure when the device cannot be identified or its
-orientation event cannot be delivered. See [design.md](design.md) for the
+The command exits 1 (HTTP `500`) when the device cannot be identified or its
+orientation event cannot be delivered, and 3 (HTTP `504`) when the Duo's
+guest pose helper timed out: the change may have landed before the helper's
+deadline, and will not land later. `baguette hinge` does the same for a fold.
+Read the device state before retrying. See [design.md](design.md) for the
 Duo-specific dispatch and completion behavior.
 
 ## Hardware keys

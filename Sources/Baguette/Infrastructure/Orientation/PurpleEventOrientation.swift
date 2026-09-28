@@ -29,13 +29,14 @@ final class PurpleEventOrientation: Orientation, @unchecked Sendable {
         self.host = host
     }
 
-    func set(_ orientation: DeviceOrientation) -> Bool {
-        guard let device = host.resolveDevice(udid: udid) else { return false }
-        return OrientationEvent.send(
+    func set(_ orientation: DeviceOrientation) -> OrientationDelivery {
+        guard let device = host.resolveDevice(udid: udid) else { return .rejected }
+        let sent = OrientationEvent.send(
             orientation: orientation,
             lookupPort: { name in lookupMachPort(on: device, named: name) },
             deliver: { data in sendMachMessage(data) }
         )
+        return sent ? .delivered : .rejected
     }
 }
 

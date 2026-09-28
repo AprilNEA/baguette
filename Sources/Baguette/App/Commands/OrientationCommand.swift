@@ -26,11 +26,16 @@ struct OrientationCommand: ParsableCommand {
             log("Device \(simulator.name) is not booted")
             Foundation.exit(1)
         }
-        guard simulator.orientation().set(value) else {
+        switch simulator.orientation().set(value) {
+        case .delivered:
+            log("Set \(simulator.name) → \(value.wireName)")
+        case .rejected:
             log("Orientation change rejected (event port or guest pose helper unavailable?)")
             Foundation.exit(1)
+        case .unconfirmed:
+            log("Orientation change unconfirmed; read the device state before retrying")
+            Foundation.exit(3)
         }
-        log("Set \(simulator.name) → \(value.wireName)")
     }
 }
 

@@ -14,6 +14,7 @@ For releases prior to this changelog, see the
 - `baguette orientation` now rotates iPhone Duo instead of reporting success without rotating. [Rotation](docs/features/hinge/README.md#rotation).
 - iPhone Duo `hinge`, rotation and hardware keys return once the guest has played the command and report a helper that failed to start; a helper that stops answering is stopped, so it cannot act after the command reports a timeout. [Hinge](docs/features/hinge/README.md)
 - In a custom `--device-set`, where the angle cannot be read back, `baguette hinge` moves straight to the requested angle instead of sweeping from closed through the cover panel. [Hinge](docs/features/hinge/README.md#gotchas)
+- An iPhone Duo `orientation` or `hinge` whose guest helper timed out exits 3 (HTTP `504`) instead of reporting an ordinary failure, since the change may have landed. [Rotation](docs/features/hinge/README.md#rotation)
 - Input commands wait for HID transmission before reporting success or exiting; transmission errors and timeouts report failure. See [dispatch semantics](docs/features/touches/design.md#5-dispatch) ([#90](https://github.com/tddworks/baguette/pull/90)).
 - `--device-set` now reaches display enumeration; stalled probes cancel output reads on timeout and failed display resolution retains `simctl` diagnostics. → [docs](docs/features/companion-screens/README.md#gotchas) ([#92](https://github.com/tddworks/baguette/pull/92))
 
