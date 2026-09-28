@@ -10,6 +10,9 @@ For releases prior to this changelog, see the
 
 ## [Unreleased]
 
+### Added
+- `baguette render-3d --screen` accepts `--hinge-degrees` and `--screen-rotation` to place saved screenshots on the active foldable panel with the requested fold and image orientation. [Offline folded screenshots](docs/features/3d-rendering/models.md#offline-folded-screenshots).
+
 ### Fixed
 - Input commands wait for HID transmission before reporting success or exiting; transmission errors and timeouts report failure. See [dispatch semantics](docs/features/touches/design.md#5-dispatch) ([#90](https://github.com/tddworks/baguette/pull/90)).
 - `--device-set` now reaches display enumeration; stalled probes cancel output reads on timeout and failed display resolution retains `simctl` diagnostics. → [docs](docs/features/companion-screens/README.md#gotchas) ([#92](https://github.com/tddworks/baguette/pull/92))
@@ -22,9 +25,6 @@ For releases prior to this changelog, see the
 - The AX inspector and `baguette describe-ui` tree hit tests can select descendants outside empty or smaller container frames. → [docs](docs/features/accessibility/README.md#gotchas) ([#89](https://github.com/tddworks/baguette/pull/89))
 - `baguette stream` no longer crashes on startup and now releases capture resources when stopped by Ctrl-C or SIGTERM.
 - `baguette stream --help` no longer offers an `h264` format it rejects, and `baguette logs --help` lists the levels (`default`, `info`, `debug`) and styles (including `ndjson`) it actually accepts.
-
-### Added
-- `baguette render-3d --screen` accepts `--hinge-degrees` and `--screen-rotation` to place saved screenshots on the active foldable panel with the requested fold and image orientation. [Offline folded screenshots](docs/features/3d-rendering/models.md#offline-folded-screenshots).
 
 ### Changed
 - `CHANGELOG.md` now holds only the current minor; the 0.1.x history moved unchanged to `docs/changelog/0.1.md`.
