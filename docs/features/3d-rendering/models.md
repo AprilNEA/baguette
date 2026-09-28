@@ -163,6 +163,14 @@ preserves the existing rendering behavior. Both flags require `--screen`;
 `--hinge-degrees` also requires a model with a foldable scene. Ordinary
 phone models still support saved-image rotation.
 
+Screen rotation does not rotate the output canvas. Without `--size`, the
+canvas keeps the original image's width and height, even for 90° or 270°;
+ratio-based sizes also use those original dimensions. Set `--size WIDTHxHEIGHT`
+explicitly when the rotated image should determine the canvas dimensions.
+
+On foldable models, `--screen-glass` applies only to the inner screen; it has
+no effect on the cover panel (selected by `--hinge-degrees` below 90°).
+
 ## Variants
 
 Variants use one public set/choice vocabulary with two definition strategies:

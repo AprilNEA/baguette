@@ -1,9 +1,17 @@
+import ArgumentParser
 import Foundation
 import Testing
 @testable import Baguette
 
 @Suite("DeviceRenderPlan")
 struct DeviceRenderPlanTests {
+
+    @Test func `fold option errors explain the unsupported request`() {
+        #expect(Render3DCommand.message(for: DeviceModelError.modelCannotFold("iphone-17"))
+            == "Model 'iphone-17' cannot fold; omit --hinge-degrees or choose a foldable model.")
+        #expect(Render3DCommand.message(for: DeviceModelError.invalidHingeAngle)
+            == "The hinge angle must be finite and between 0 and 180 degrees.")
+    }
 
     @Test(arguments: [(0.0, IntegratedPanel.primary), (89.0, .primary), (90.0, .secondary), (130.0, .secondary), (180.0, .secondary)])
     func `saved fold poses select the corresponding screen`(angle: Double, panel: IntegratedPanel) throws {
