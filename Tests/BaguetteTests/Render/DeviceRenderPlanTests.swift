@@ -13,6 +13,11 @@ struct DeviceRenderPlanTests {
             == "The hinge angle must be finite and between 0 and 180 degrees.")
     }
 
+    @Test func `an unreadable screen image says so instead of naming the error case`() {
+        #expect(Render3DCommand.message(for: DeviceModelError.screenImageInvalid)
+            == "The screen image is not a readable PNG or JPEG.")
+    }
+
     @Test(arguments: [(0.0, IntegratedPanel.primary), (89.0, .primary), (90.0, .secondary), (130.0, .secondary), (180.0, .secondary)])
     func `saved fold poses select the corresponding screen`(angle: Double, panel: IntegratedPanel) throws {
         let plan = try Self.foldPlan(angle: angle)
