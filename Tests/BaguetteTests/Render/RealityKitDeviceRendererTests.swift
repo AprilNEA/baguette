@@ -46,7 +46,8 @@ struct RealityKitDeviceRendererTests {
         let palette: [UInt8] = [255, 0, 0, 0, 255, 0]
         let space = try #require(CGColorSpace(indexedBaseSpace: CGColorSpaceCreateDeviceRGB(),
             last: 1, colorTable: palette))
-        let provider = try #require(CGDataProvider(data: Data([0, 1, 1, 0]) as CFData))
+        // One red corner, so a half turn changes the image.
+        let provider = try #require(CGDataProvider(data: Data([0, 1, 1, 1]) as CFData))
         let image = try #require(CGImage(width: 2, height: 2, bitsPerComponent: 8,
             bitsPerPixel: 8, bytesPerRow: 2, space: space, bitmapInfo: [],
             provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent))
@@ -55,10 +56,11 @@ struct RealityKitDeviceRendererTests {
         CGImageDestinationAddImage(destination, image, nil)
         #expect(CGImageDestinationFinalize(destination))
         let renderer = RealityKitDeviceRenderer()
-        _ = try renderer.render(plan: plan, screenImage: data as Data)
+        let unrotated = try renderer.render(plan: plan, screenImage: data as Data)
         let rotated = try Self.plan(directory: scratch, file: "device.usda", screenRotation: .half)
         let result = try renderer.render(plan: rotated, screenImage: data as Data)
         #expect(try Self.opaqueHeight(result) > 160)
+        #expect(result != unrotated)
     }
 
     @Test func `renders a generated device scene to requested PNG dimensions`() throws {
