@@ -165,6 +165,16 @@ preserves the existing rendering behavior. Both flags require `--screen`;
 `--hinge-degrees` also requires a model with a foldable scene. Ordinary
 phone models still support saved-image rotation.
 
+Captures are saved upright, but the inner display lies on its side in the
+model. To render a capture upright:
+
+| Capture | Flags |
+| --- | --- |
+| Cover, portrait | none |
+| Cover, landscape | `--screen-rotation 90 --rotation 0,0,-90` |
+| Inner display, portrait | `--rotation 0,0,90` |
+| Inner display, landscape | `--screen-rotation 90` |
+
 Screen rotation does not rotate the output canvas. Without `--size`, the
 canvas keeps the original image's width and height, even for 90° or 270°;
 ratio-based sizes also use those original dimensions. Set `--size WIDTHxHEIGHT`
