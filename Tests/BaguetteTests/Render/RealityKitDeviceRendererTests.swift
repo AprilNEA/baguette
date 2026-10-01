@@ -56,11 +56,14 @@ struct RealityKitDeviceRendererTests {
         CGImageDestinationAddImage(destination, image, nil)
         #expect(CGImageDestinationFinalize(destination))
         let renderer = RealityKitDeviceRenderer()
-        let unrotated = try renderer.render(plan: plan, screenImage: data as Data)
-        let rotated = try Self.plan(directory: scratch, file: "device.usda", screenRotation: .half)
-        let result = try renderer.render(plan: rotated, screenImage: data as Data)
+        _ = try renderer.render(plan: plan, screenImage: data as Data)
+        // Upside down rolls the model a half turn and turns the image a half
+        // turn; a model rolled alone must not look the same.
+        let rolledOnly = try Self.plan(directory: scratch, file: "device.usda", rotation: DeviceRotation(x: -8, y: 18, z: 180))
+        let upsideDown = try Self.plan(directory: scratch, file: "device.usda", screenOrientation: .portraitUpsideDown)
+        let result = try renderer.render(plan: upsideDown, screenImage: data as Data)
         #expect(try Self.opaqueHeight(result) > 160)
-        #expect(result != unrotated)
+        #expect(try result != renderer.render(plan: rolledOnly, screenImage: data as Data))
     }
 
     @Test func `renders a generated device scene to requested PNG dimensions`() throws {
@@ -206,7 +209,8 @@ private extension RealityKitDeviceRendererTests {
         finish: String? = nil,
         foldable: Bool = false,
         hingeDegrees: Double? = nil,
-        screenRotation: ScreenRotation = .none
+        screenOrientation: DeviceOrientation? = nil,
+        rotation: DeviceRotation = DeviceRotation(x: -8, y: 18, z: 0)
     ) throws -> DeviceRenderPlan {
         let model = InstalledDeviceModel(
             definition: DeviceModelDefinition(
@@ -259,10 +263,10 @@ private extension RealityKitDeviceRendererTests {
         return try DeviceRenderPlan.build(
             model: model,
             variants: finish.map { ["finish": $0] } ?? [:],
-            rotation: DeviceRotation(x: -8, y: 18, z: 0),
+            rotation: rotation,
             outputSize: RenderDimensions(width: 320, height: 240),
             hingeDegrees: hingeDegrees,
-            screenRotation: screenRotation
+            screenOrientation: screenOrientation
         )
     }
 }

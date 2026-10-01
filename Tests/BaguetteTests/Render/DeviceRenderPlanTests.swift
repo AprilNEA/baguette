@@ -13,6 +13,43 @@ struct DeviceRenderPlanTests {
         #expect(plan.screenRotation == .quarter)
     }
 
+    /// A capture is saved upright in the orientation it was taken in. The
+    /// plan turns the image back to its panel's own buffer and rolls the
+    /// model as the guest was held (`InterfaceRoll`), on top of `--rotation`.
+    @Test(arguments: [
+        (180.0, DeviceOrientation.portrait, ScreenRotation.none, 90.0),
+        (180.0, .landscapeLeft, .quarter, 0.0),
+        (180.0, .portraitUpsideDown, .half, -90.0),
+        (180.0, .landscapeRight, .threeQuarters, 180.0),
+        (0.0, .portrait, .none, 0.0),
+        (0.0, .landscapeLeft, .quarter, -90.0),
+        (0.0, .portraitUpsideDown, .half, 180.0),
+        (0.0, .landscapeRight, .threeQuarters, 90.0),
+    ])
+    func `a capture's orientation turns its image and rolls a foldable upright`(
+        angle: Double, orientation: DeviceOrientation, turn: ScreenRotation, roll: Double
+    ) throws {
+        let plan = try Self.foldPlan(angle: angle, orientation: orientation, rotation: DeviceRotation(x: 5, y: 10, z: 20))
+        #expect(plan.screenRotation == turn)
+        #expect(plan.rotation == DeviceRotation(x: 5, y: 10, z: 20 + roll))
+    }
+
+    @Test func `an unfolded foldable rolls for its inner screen and a phone like a cover`() throws {
+        #expect(try Self.foldPlan(angle: nil, orientation: .portrait).rotation.z == 90)
+        let phone = try DeviceRenderPlan.build(
+            model: Self.installed(), variants: [:], rotation: .zero,
+            outputSize: RenderDimensions(width: 300, height: 400), screenOrientation: .landscapeLeft
+        )
+        #expect(phone.screenRotation == .quarter)
+        #expect(phone.rotation.z == -90)
+    }
+
+    @Test func `without an orientation the image and model are left as they are`() throws {
+        let plan = try Self.foldPlan(angle: 130, orientation: nil, rotation: DeviceRotation(x: 5, y: 10, z: 20))
+        #expect(plan.screenRotation == .none)
+        #expect(plan.rotation == DeviceRotation(x: 5, y: 10, z: 20))
+    }
+
     @Test(arguments: [-1.0, 181.0, Double.infinity, Double.nan])
     func `render plans reject invalid fold angles`(angle: Double) {
         #expect(throws: DeviceModelError.invalidHingeAngle) {
@@ -39,14 +76,18 @@ struct DeviceRenderPlanTests {
         #expect(try Self.foldPlan(angle: nil).screenPanel == nil)
     }
 
-    private static func foldPlan(angle: Double?) throws -> DeviceRenderPlan {
+    private static func foldPlan(
+        angle: Double?,
+        orientation: DeviceOrientation? = .landscapeLeft,
+        rotation: DeviceRotation = .zero
+    ) throws -> DeviceRenderPlan {
         try DeviceRenderPlan.build(
             model: installed(fold: DeviceModelFold(
                 clip: "fold", shutTime: 5, coverMaterial: "Cover",
                 coverTextureSize: RenderDimensions(width: 100, height: 200), openPoseDegrees: 130
             )),
-            variants: [:], rotation: .zero, outputSize: RenderDimensions(width: 300, height: 400),
-            hingeDegrees: angle, screenRotation: .quarter
+            variants: [:], rotation: rotation, outputSize: RenderDimensions(width: 300, height: 400),
+            hingeDegrees: angle, screenOrientation: orientation
         )
     }
 

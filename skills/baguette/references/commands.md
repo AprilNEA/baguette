@@ -359,7 +359,7 @@ baguette record --udid <udid> --output <output> [--size <size>] [--fit <fit>] [-
 Render a simulator screen on an installed 3D device model
 
 ```
-baguette render-3d [--udid <udid>] [--screen <screen>] [--device <device>] [--screen-rotation <screen-rotation>] [--hinge-degrees <hinge-degrees>] [--variant <variant> …] [--rotation <rotation>] [--size <size>] [--fit <fit>] [--background <background>] [--screen-glass] [--output <output>]
+baguette render-3d [--udid <udid>] [--screen <screen>] [--device <device>] [--screen-orientation <screen-orientation>] [--hinge-degrees <hinge-degrees>] [--variant <variant> …] [--rotation <rotation>] [--size <size>] [--fit <fit>] [--background <background>] [--screen-glass] [--output <output>]
 ```
 
 | Flag | Required | Default | Description |
@@ -367,7 +367,7 @@ baguette render-3d [--udid <udid>] [--screen <screen>] [--device <device>] [--sc
 | `--udid` |  |  | Simulator UDID to capture |
 | `--screen` |  |  | Existing PNG or JPEG screen image |
 | `--device` |  |  | Installed 3D model definition ID |
-| `--screen-rotation` |  |  | With --screen: rotate the saved image counterclockwise (defaults to 0) One of: 0, 90, 180, 270. |
+| `--screen-orientation` |  |  | With --screen: the interface orientation the capture was taken in, so it renders upright. One of: portrait, landscape-left, landscape-right, portrait-upside-down. |
 | `--hinge-degrees` |  |  | With --screen and a foldable model: fold angle, 0 through 180 degrees |
 | `--variant` |  |  | Model variant as SET=CHOICE (repeatable) |
 | `--rotation` |  | `0,0,0` | Device rotation as X,Y,Z degrees |

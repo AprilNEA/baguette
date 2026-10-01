@@ -15,6 +15,18 @@ enum ScreenRotation: Int, CaseIterable, Sendable {
     case threeQuarters = 270
 
     var swapsDimensions: Bool { self == .quarter || self == .threeQuarters }
+
+    /// The counterclockwise turn from an upright capture taken in
+    /// `orientation` back to its panel's own buffer: a quarter turn per
+    /// step of the interface cycle from portrait, on either panel.
+    init(capturedIn orientation: DeviceOrientation?) {
+        switch orientation {
+        case .landscapeLeft?: self = .quarter
+        case .portraitUpsideDown?: self = .half
+        case .landscapeRight?: self = .threeQuarters
+        case .portrait?, nil: self = .none
+        }
+    }
 }
 
 enum DeviceScreenFit: String, Equatable, Sendable, Codable {
@@ -39,10 +51,17 @@ struct DeviceRenderPlan: Equatable, Sendable {
     /// default so automation screenshots stay pixel-stable.
     let screenGlass: Bool
     let hingeDegrees: Double?
-    let screenRotation: ScreenRotation
+    /// The interface orientation a saved capture was taken in. With it the
+    /// image turns back to its panel's buffer and `rotation` includes the
+    /// roll that stands the capture upright; without it neither happens.
+    let screenOrientation: DeviceOrientation?
 
     var screenPanel: IntegratedPanel? {
         hingeDegrees.map { HingeAngle(degrees: $0).litPanel }
+    }
+
+    var screenRotation: ScreenRotation {
+        ScreenRotation(capturedIn: screenOrientation)
     }
 
     /// The glass layer is shaped for the inner screen and is left out when
@@ -60,7 +79,7 @@ struct DeviceRenderPlan: Equatable, Sendable {
         background: DeviceRenderBackground = .transparent,
         screenGlass: Bool = false,
         hingeDegrees: Double? = nil,
-        screenRotation: ScreenRotation = .none
+        screenOrientation: DeviceOrientation? = nil
     ) throws -> DeviceRenderPlan {
         guard outputSize.width > 0, outputSize.height > 0 else {
             throw DeviceModelError.invalidOutputSize
@@ -82,16 +101,22 @@ struct DeviceRenderPlan: Equatable, Sendable {
                 throw DeviceModelError.invalidBackground(color)
             }
         }
+        // A foldable left at its rest pose lies flat, its inner screen lit;
+        // a phone's one panel turns like a cover.
+        let litPanel = model.definition.scene.fold == nil
+            ? IntegratedPanel.primary
+            : HingeAngle(degrees: hingeDegrees ?? 180).litPanel
+        let roll = screenOrientation.map { InterfaceRoll.degrees($0, litPanel: litPanel) } ?? 0
         return DeviceRenderPlan(
             model: model,
             variants: try model.definition.resolveVariants(variants),
-            rotation: rotation,
+            rotation: DeviceRotation(x: rotation.x, y: rotation.y, z: rotation.z + roll),
             outputSize: outputSize,
             fit: fit,
             background: background,
             screenGlass: screenGlass,
             hingeDegrees: hingeDegrees,
-            screenRotation: screenRotation
+            screenOrientation: screenOrientation
         )
     }
 }

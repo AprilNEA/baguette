@@ -11,7 +11,7 @@ For releases prior to this changelog, see the
 ## [Unreleased]
 
 ### Added
-- `baguette render-3d --screen` accepts `--hinge-degrees` and `--screen-rotation` to place saved screenshots on the active foldable panel with the requested fold and image orientation. [Offline folded screenshots](docs/features/3d-rendering/models.md#offline-folded-screenshots).
+- `baguette render-3d --screen` accepts `--hinge-degrees` and `--screen-orientation` to place saved screenshots on the active foldable panel, upright, with the requested fold. [Offline folded screenshots](docs/features/3d-rendering/models.md#offline-folded-screenshots).
 
 ### Fixed
 - Input commands wait for HID transmission before reporting success or exiting; transmission errors and timeouts report failure. See [dispatch semantics](docs/features/touches/design.md#5-dispatch) ([#90](https://github.com/tddworks/baguette/pull/90)).
