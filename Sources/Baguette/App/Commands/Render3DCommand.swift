@@ -68,9 +68,6 @@ struct Render3DCommand: AsyncParsableCommand {
         if screen == nil, hingeDegrees != nil || screenRotation != nil {
             throw ValidationError("--hinge-degrees and --screen-rotation require --screen")
         }
-        if let hingeDegrees, !hingeDegrees.isFinite || !(0...180).contains(hingeDegrees) {
-            throw ValidationError("--hinge-degrees must be 0 through 180")
-        }
         _ = try DeviceRenderArguments.rotation(rotation)
         if let size { _ = try DeviceRenderArguments.captureSize(size) }
         _ = try DeviceRenderArguments.variants(variants)

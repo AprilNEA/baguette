@@ -39,13 +39,14 @@ struct OfflineRender3DCommandTests {
         #expect(command.hingeDegrees == nil)
     }
 
-    @Test(arguments: ["-1", "181", "nan", "inf"])
-    func `rejects invalid hinge angles`(value: String) {
-        #expect(throws: (any Error).self) {
-            try Render3DCommand.parse([
-                "--screen", "screen.png", "--device", "iphone-duo", "--hinge-degrees", value
-            ])
-        }
+    /// The render plan rejects an angle off 0...180 with
+    /// `DeviceModelError.invalidHingeAngle`; the command does not check it twice.
+    @Test(arguments: ["181", "nan", "inf"])
+    func `leaves the hinge range to the render plan`(value: String) throws {
+        let command = try Render3DCommand.parse([
+            "--screen", "screen.png", "--device", "iphone-duo", "--hinge-degrees", value
+        ])
+        #expect(command.hingeDegrees.map { !$0.isFinite || $0 > 180 } == true)
     }
 
     @Test(arguments: ["45", "-90", "360"])
