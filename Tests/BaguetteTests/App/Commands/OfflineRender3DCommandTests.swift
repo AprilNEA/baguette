@@ -4,6 +4,18 @@ import Testing
 
 @Suite("OfflineRender3DCommand")
 struct OfflineRender3DCommandTests {
+    @Test func `fold option errors explain the unsupported request`() {
+        #expect(Render3DCommand.message(for: DeviceModelError.modelCannotFold("iphone-17"))
+            == "Model 'iphone-17' cannot fold; omit --hinge-degrees or choose a foldable model.")
+        #expect(Render3DCommand.message(for: DeviceModelError.invalidHingeAngle)
+            == "The hinge angle must be finite and between 0 and 180 degrees.")
+    }
+
+    @Test func `an unreadable screen image says so instead of naming the error case`() {
+        #expect(Render3DCommand.message(for: DeviceModelError.screenImageInvalid)
+            == "The screen image is not a readable PNG or JPEG.")
+    }
+
     @Test(arguments: [["--hinge-degrees", "130"], ["--screen-rotation", "90"], ["--screen-rotation", "0"]])
     func `offline pose options reject live capture`(option: [String]) {
         #expect(throws: (any Error).self) {
