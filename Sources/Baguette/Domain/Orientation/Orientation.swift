@@ -1,13 +1,10 @@
 import Foundation
 import Mockable
 
-/// Drive a booted simulator's orientation. Foldables use a guest pose event;
-/// ordinary devices use the legacy GraphicsServices event. The foreground app
-/// still chooses its interface orientation, which can differ from device pose.
+/// Drive a booted simulator's physical orientation. The foreground app
+/// still chooses its interface orientation, which can differ.
 @Mockable
 protocol Orientation: Sendable {
-    /// Reports dispatch, not whether the app rotated. Foldable dispatch
-    /// waits for its helper's answer; legacy dispatch reports whether the
-    /// event port accepted the event.
+    /// Reports whether the change was delivered, not whether the app rotated.
     func set(_ orientation: DeviceOrientation) -> PoseDelivery
 }
