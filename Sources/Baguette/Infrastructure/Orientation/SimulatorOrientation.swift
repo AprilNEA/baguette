@@ -12,17 +12,15 @@ final class SimulatorOrientation: Orientation, @unchecked Sendable {
         self.standard = standard
     }
 
-    func set(_ orientation: DeviceOrientation) -> OrientationDelivery {
+    func set(_ orientation: DeviceOrientation) -> PoseDelivery {
         do {
             guard try isFoldable() else { return standard.set(orientation) }
             try motor.turn(to: orientation)
             return .delivered
-        } catch HingeError.toolTimedOut {
-            logErr("Orientation change unconfirmed: \(HingeError.toolTimedOut)")
-            return .unconfirmed
         } catch {
-            logErr("Orientation change failed: \(error)")
-            return .rejected
+            let delivery = PoseDelivery(failure: error)
+            logErr("Orientation change \(delivery == .unconfirmed ? "unconfirmed" : "failed"): \(error)")
+            return delivery
         }
     }
 }

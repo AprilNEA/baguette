@@ -29,7 +29,7 @@ final class PurpleEventOrientation: Orientation, @unchecked Sendable {
         self.host = host
     }
 
-    func set(_ orientation: DeviceOrientation) -> OrientationDelivery {
+    func set(_ orientation: DeviceOrientation) -> PoseDelivery {
         guard let device = host.resolveDevice(udid: udid) else { return .rejected }
         let sent = OrientationEvent.send(
             orientation: orientation,

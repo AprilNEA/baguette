@@ -49,12 +49,12 @@ struct HingeCLICommand: ParsableCommand {
         }
         do {
             try simulator.hinge().fold(to: command.degrees, over: command.duration)
-        } catch HingeError.toolTimedOut {
-            log("Hinge move unconfirmed: \(HingeError.toolTimedOut) Read the hinge before retrying.")
-            Foundation.exit(3)
         } catch {
-            log("Hinge could not be driven: \(error)")
-            Foundation.exit(1)
+            let delivery = PoseDelivery(failure: error)
+            log(delivery == .unconfirmed
+                ? "Hinge move unconfirmed: \(error) Read the hinge before retrying."
+                : "Hinge could not be driven: \(error)")
+            Foundation.exit(delivery.exitStatus)
         }
         print(#"{"ok":true,"angleDegrees":\#(command.degrees)}"#)
     }

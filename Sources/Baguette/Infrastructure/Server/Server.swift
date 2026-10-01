@@ -1589,12 +1589,9 @@ struct Server: Sendable {
         do {
             try sim.hinge().fold(to: command.degrees, over: command.duration)
             return .ok
-        } catch HingeError.toolTimedOut {
-            return .unconfirmed
-        } catch let error as HingeError {
-            return .failed(error)
         } catch {
-            return .failed(.toolFailed(status: -1))
+            guard PoseDelivery(failure: error) != .unconfirmed else { return .unconfirmed }
+            return .failed(error as? HingeError ?? .toolFailed(status: -1))
         }
     }
 

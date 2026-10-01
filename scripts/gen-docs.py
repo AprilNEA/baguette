@@ -111,7 +111,7 @@ def gen_commands(binary):
         "**Common flag** (on every simulator command, not repeated below):",
         "`--device-set <path>`: a custom device set (defaults to Xcode's default set).",
         "",
-        "**Exit codes:** `0` on success, `1` on any error. Errors print `{\"ok\":false,\"error\":\"…\"}`, so parse stdout, not just the exit code.",
+        "**Exit codes:** `0` on success, `1` on any error, `3` when an iPhone Duo `orientation` or `hinge` change is unconfirmed: its guest helper timed out, so the change may have landed and will not land later. Errors print `{\"ok\":false,\"error\":\"…\"}`, so parse stdout, not just the exit code.",
         "",
         "**Commands:** " + " · ".join(f"[{s['commandName']}](#baguette-{s['commandName']})" for s in top),
         "",
