@@ -171,8 +171,7 @@ final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
         value == value.rounded() ? String(Int(value)) : String(value)
     }
 
-    /// One serving child and what it has said: its guest pid, then one
-    /// `done <status>` per command. Other output is diagnostics.
+    /// One serving child, its guest pid and the answers it has given.
     private final class Helper: @unchecked Sendable {
         enum Answer: Equatable {
             case done(Int32)
@@ -183,7 +182,7 @@ final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
         let process: any Subprocess
         private let lock = NSLock()
         private let arrived = DispatchSemaphore(value: 0)
-        private var output = LineBuffer()
+        private var replies = HingeControlReplyReader()
         private var answers: [Int32] = []
         private var exitStatus: Int32?
         private var guestPID: Int32?
@@ -201,11 +200,11 @@ final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
         func receive(_ bytes: Data) {
             lock.lock()
             var count = 0
-            for line in output.append(bytes) {
-                let words = line.split(separator: " ")
-                guard words.count == 2, let value = Int32(words[1]) else { continue }
-                if words[0] == "pid", value > 1 { guestPID = value }
-                if words[0] == "done" { answers.append(value); count += 1 }
+            for reply in replies.append(bytes) {
+                switch reply {
+                case .pid(let pid): guestPID = pid
+                case .done(let status): answers.append(status); count += 1
+                }
             }
             lock.unlock()
             for _ in 0..<count { arrived.signal() }
