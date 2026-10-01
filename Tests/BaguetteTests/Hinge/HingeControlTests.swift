@@ -1,23 +1,40 @@
 import Foundation
 import Testing
 
-/// The guest helper's side of the host protocol, compiled for macOS from
-/// `Injected/HingeControl/Sources`: a `--deadline` after which a helper that
-/// has not started refuses to act, and one `done <status>` reply per command.
-@Suite("HingeControlProtocol")
-struct HingeControlProtocolTests {
+/// `HingeControl`, the guest pose helper, compiled for macOS from
+/// `Injected/HingeControl/Sources`: its native orientation values, the
+/// `done <status>` reply per served command, and the `--deadline` after
+/// which a helper that has not started refuses to act.
+@Suite("HingeControl")
+struct HingeControlTests {
     private static let sources = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent()
         .appending(path: "Injected/HingeControl/Sources")
 
-    @Test func `serve answers every command with its status and skips blank lines`() throws {
-        try Self.runProgram("""
+    @Test func `orientation values, served replies and deadlines follow the host protocol`() throws {
+        try Self.run(compiling: """
         #import "HingeProtocol.h"
         #include <assert.h>
         #include <string.h>
         int main(void) {
           @autoreleasepool {
+            for (NSString *name in @[@"portrait", @"pud", @"landscape-left", @"landscape-right"]) {
+              __block int calls = 0;
+              int result = dispatchHingeOrientation(name, ^BOOL(const char *value) {
+                ++calls;
+                assert([name isEqualToString:@(value)]);
+                return YES;
+              });
+              assert(result == 0 && calls == 1);
+              assert(dispatchHingeOrientation(name, ^BOOL(const char *value) { return NO; }) == 1);
+            }
+            for (NSString *name in @[@"", @"garbage", @"landscapeLeft", @"landscapeRight", @"portraitUpsideDown"]) {
+              assert(dispatchHingeOrientation(name, ^BOOL(const char *value) {
+                assert(0 && "invalid orientation dispatched"); return YES;
+              }) == 2);
+            }
+
             char script[] = "angle 10\\n\\n   \\nbogus\\norientation pud\\n";
             FILE *input = fmemopen(script, strlen(script), "r");
             char *text = NULL; size_t length = 0;
@@ -32,18 +49,7 @@ struct HingeControlProtocolTests {
             fclose(output);
             assert([seen isEqualToArray:(@[@"angle 10", @"bogus", @"orientation pud"])]);
             assert(strcmp(text, "done 0\\ndone 2\\ndone 1\\n") == 0);
-          }
-          return 0;
-        }
-        """)
-    }
 
-    @Test func `deadlines are finite Unix times and a passed one is detected`() throws {
-        try Self.runProgram("""
-        #import "HingeProtocol.h"
-        #include <assert.h>
-        int main(void) {
-          @autoreleasepool {
             double deadline = 0;
             assert(parseHingeDeadline("1790615000.25", &deadline) && deadline == 1790615000.25);
             const char *invalid[] = {"", "soon", "12x", "inf", "nan"};
@@ -57,25 +63,24 @@ struct HingeControlProtocolTests {
     }
 
     /// Every case here must exit before the helper creates HID services.
-    @Test func `a helper started after its deadline does nothing and malformed deadlines are rejected`() throws {
+    @Test func `invalid arguments and late starts exit before creating HID services`() throws {
         let scratch = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: scratch) }
         let helper = scratch.appending(path: "HingeControl")
-        let build = Process()
-        build.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-        build.arguments = ["--sdk", "macosx", "clang", "-fobjc-arc", "-framework", "Foundation",
-            Self.sources.appending(path: "HingeControl.m").path, "-o", helper.path]
-        try build.run()
-        build.waitUntilExit()
-        try #require(build.terminationStatus == 0)
+        try Self.compile([Self.sources.appending(path: "HingeControl.m").path], to: helper)
         let cases: [([String], Int32)] = [
-            (["--deadline", "1", "orientation", "portrait"], 3),
-            (["--deadline", "1", "serve"], 3),
+            ([], 2),
+            (["orientation"], 2),
+            (["orientation", "bogus"], 2),
+            (["orientation", "landscapeLeft"], 2),
+            (["orientation", "portrait", "extra"], 2),
             (["--deadline"], 2),
             (["--deadline", "soon", "orientation", "portrait"], 2),
             (["--deadline", "1"], 2),
             (["--deadline", "1", "orientation", "bogus"], 2),
+            (["--deadline", "1", "orientation", "portrait"], 3),
+            (["--deadline", "1", "serve"], 3),
         ]
         for (arguments, expected) in cases {
             let process = Process()
@@ -93,24 +98,27 @@ struct HingeControlProtocolTests {
     }
 
     /// Compile `source` against the helper headers for macOS and require it to exit 0.
-    private static func runProgram(_ source: String) throws {
+    private static func run(compiling source: String) throws {
         let scratch = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: scratch) }
-        let file = scratch.appending(path: "ProtocolTest.m")
+        let file = scratch.appending(path: "HingeControlTest.m")
         try source.write(to: file, atomically: true, encoding: .utf8)
-        let binary = scratch.appending(path: "ProtocolTest")
-        let compile = Process()
-        compile.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-        compile.arguments = ["--sdk", "macosx", "clang", "-fobjc-arc", "-framework", "Foundation",
-            "-I", sources.path, file.path, "-o", binary.path]
-        try compile.run()
-        compile.waitUntilExit()
-        try #require(compile.terminationStatus == 0)
+        let binary = scratch.appending(path: "HingeControlTest")
+        try compile(["-I", sources.path, file.path], to: binary)
         let run = Process()
         run.executableURL = binary
         try run.run()
         run.waitUntilExit()
         #expect(run.terminationStatus == 0)
+    }
+
+    private static func compile(_ inputs: [String], to binary: URL) throws {
+        let compile = Process()
+        compile.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+        compile.arguments = ["--sdk", "macosx", "clang", "-fobjc-arc", "-framework", "Foundation"] + inputs + ["-o", binary.path]
+        try compile.run()
+        compile.waitUntilExit()
+        try #require(compile.terminationStatus == 0)
     }
 }

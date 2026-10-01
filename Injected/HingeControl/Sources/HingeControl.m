@@ -43,7 +43,6 @@
 // ready to act exits 3 without acting. A helper prints `pid <n>` before it
 // starts, so its owner can stop it after a timeout.
 #import <Foundation/Foundation.h>
-#import "HingeOrientation.h"
 #import "HingeProtocol.h"
 #import <dlfcn.h>
 #import <objc/runtime.h>
