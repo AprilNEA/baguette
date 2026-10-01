@@ -27,7 +27,7 @@ The server trusts only loopback `Host` / `Origin` values, so a request through a
 | `GET` | `/simulators.json` | `{running, available}`, same as `baguette list --json` | |
 | `GET` | `/simulators/:udid` | focus-mode page | [baguette-sdk](features/baguette-sdk/README.md) |
 | `POST` | `/simulators/:udid/boot`, `/shutdown` | boot / shut down | [boot](features/boot/README.md) |
-| `POST` | `/simulators/:udid/orientation?value=` | `portrait`, `landscape-left`, `landscape-right`, `portrait-upside-down` | [commands](commands.md#baguette-orientation) |
+| `POST` | `/simulators/:udid/orientation?value=` | `portrait`, `landscape-left`, `landscape-right`, `portrait-upside-down`; `504` when an iPhone Duo change is unconfirmed | [hinge](features/hinge/README.md#rotation) |
 | `POST` | `/simulators/:udid/input` | one gesture envelope → its ack | [wire.md](wire.md) |
 | `GET` | `/simulators/:udid/describe-ui.json?x=&y=` | accessibility tree; `x`+`y` hit-tests a point | [accessibility](features/accessibility/README.md) |
 | `GET` | `/simulators/:udid/screenshot.jpg`, `.png` | one frame (`quality`, `scale`, `size`, `fit`, `background`) | [screenshot](features/screenshot/README.md), [capture-size](features/capture-size/README.md) |
@@ -42,7 +42,7 @@ The server trusts only loopback `Host` / `Origin` values, so a request through a
 | `POST` `DELETE` | `/simulators/:udid/location` | simulated GPS | [location](features/location/README.md) |
 | `GET` `POST` `DELETE` | `/simulators/:udid/motion` | injected CoreMotion | [motion](features/motion/README.md) |
 | `GET` `POST` `DELETE` | `/simulators/:udid/network` | injected network conditioning | [network](features/network/README.md) |
-| `GET` `POST` | `/simulators/:udid/hinge` | iPhone Duo hinge angle / fold (`pose=`, `angle=`, `duration=`) | [hinge](features/hinge/README.md) |
+| `GET` `POST` | `/simulators/:udid/hinge` | iPhone Duo hinge angle / fold (`pose=`, `angle=`, `duration=`); `504` when a fold is unconfirmed | [hinge](features/hinge/README.md) |
 | `GET` | `/simulators/:udid/companion-screens.json` | CarPlay display + paired watch | [companion-screens](features/companion-screens/README.md) |
 | `POST` | `/simulators/:udid/carplay-display` | attach CarPlay | [companion-screens](features/companion-screens/README.md) |
 | `POST` | `/simulators/:udid/files`, `/apps`, `/media` | upload: by extension, app install, Photos | [file-upload](features/file-upload/README.md) |
