@@ -400,6 +400,180 @@ Deliberately not "fixed" by making surfaceless ports bind: that would
 trade a clear "nothing attached" for a black rectangle, which is the
 symptom this whole feature exists to stop showing you.
 
+## Xcode 27: no Simulator.app, and CarPlay doesn't come up
+
+Investigated 2026-10-01 on Xcode 27.0 (27A259), iOS 27.0 and iOS 26.4
+runtimes, iPhone 18 Pro / iPhone 17 Pro. Everything here was found by
+experiment; the spike code isn't in the repo. **Nothing in this section
+has shipped** — `enableCarPlay()` still scripts the menu and fails on
+Xcode 27.
+
+### Why the attach fails
+
+Xcode 27 ships **DeviceHub.app instead of Simulator.app**
+(`Xcode.app/Contents/Applications/DeviceHub.app`, bundle
+`com.apple.dt.Devices`). `SimulatorMenuExternalDisplayPanel` scripts
+`application "Simulator"`, which no longer exists, so `osascript` exits 1
+with `Can't get application "Simulator" (-1728)` before any permission
+matters. The adapter discards stderr, so the pane says "grant Automation +
+Accessibility" — wrong cause. `CarPlayExtraOptions` in
+`com.apple.iphonesimulator` is read by nothing in Xcode 27 either.
+
+DeviceHub has no I/O → External Displays. Its only CarPlay is
+`DeviceKit.framework/PlugIns/CarPlaySimulator.devicekitplugin` — Apple's
+CarPlay Simulator for **real iPhones**: it links MobileDevice, CoreDevice,
+MobileBluetooth and iAP2MessageKit, and no CoreSimulator or SimulatorKit.
+Xcode 27.1 beta is the same.
+
+### What Simulator.app's menu actually did
+
+Not a CarPlay feature of its own — three host-side steps, all reachable
+without it:
+
+| Step | Call | Status on Xcode 27 |
+| --- | --- | --- |
+| Turn the profile's CarPlay screen on, with a CarPlay description | `SimScreen setCurrentMode:pixelSize:carPlayProperties:…` + `setPowerState:` | ✅ works — see the ordering trap below |
+| Build the CarPlay digitizer | `IndigoHIDMessageToCreateCarPlayService(hasTouch)` | ✅ already in `warmServices` |
+| Host a window that asks for frames | `SimScreen registerScreenCallbacksWithUUID:…` | ✅ registers, but 0 frames arrive |
+
+The screens come from the device type's `capabilities.plist` `displays`:
+every iPhone profile declares `screenID 3`, `displayType = carPlay`,
+`displayName = Wireless`, 720×480, `powerState 0`, `hasDigitizer = false`.
+They are **pre-created and powered off**; `simctl io <udid> screenConfig
+--display=3 power on` (an undocumented `simctl io` op) lights one. The
+`com.apple.framebuffer.server` port's descriptor implements
+`SimScreenAdapter`; its screens accept any mode in 320×200…3840×2160 at
+@1x/@2x/@3x, so Apple's recommended sizes (748×456, 768×1024, 800×480 @2x,
+1920×720 @3x) all fit.
+
+**Creating a screen is not possible.** `createScreenWithProperties:…`
+answers `Invalid properties or mode`: `SimRenderServer` `swift_dynamicCastClass`es
+both arguments to its own classes, so only properties it vends via
+`creatableScreenProperties` are accepted — and that list is empty for every
+profile (nothing populates `_creatableDisplays`). Only the declared screens
+can be switched on.
+
+**Ordering trap:** `setPowerState:` sends `newCarPlayProperties=nil` and
+wipes a description set earlier (`SimRenderServer`'s `UpdateScreen` log
+shows both). Set power first, then `setCurrentMode:…carPlayProperties:`.
+The dictionary keys are `SimCarPlayPropertyKey{Stark,HasTouchScreen,
+HasTouchScreenLoFi,HasHomeButton,HasBackButton,HasWheel,HasWheelBump,HasPad,
+OEMProtocolNames}`, exported by `CoreSimDeviceIO`.
+
+### Why the guest still shows nothing
+
+1. **The screen is classed AirPlay.** The guest's QuartzCore maps
+   framebuffer types onto display kinds in `-[CAWindowServer
+   _detectSimDisplays]`: type 1 → TVOut, **2 and 3 → wireless**, 4 → a
+   third kind; there is no CarPlay kind. backboardd then tags it
+   `AirPlay` (`CADisplay.tag` 4). FrontBoard's
+   `FBSCADisplayToDisplayTypes` turns tag bit `0x20` into type 3, and
+   `-[FBSDisplayIdentity isCarDisplay]` is just `type == 3` — so CarPlayApp
+   logs `didConnectIdentity:AirPlay[3-n], is car display: NO`. On iOS 27
+   backboardd *did* tag it `(car)` by itself once a synthetic session
+   (below) existed — `evaluateDisplay(WirelessDisplayModeDidChange)`; on
+   iOS 26.4 it stayed AirPlay. `-[CAWindowServerDisplay setTag:0x20]`
+   inside backboardd also works.
+2. **No CarPlay session exists.** CarPlayApp (DashBoard.framework) waits
+   for `DBSessionController sessionDidConnect:`, fed by CarKit's
+   `CARSessionStatus`, whose `CARSession` is built
+   `initWithFigEndpoint:` — an **AirPlay endpoint**. carkitd has an iOS 27
+   `acquireSyntheticCarPlaySessionWithDescriptor:reply:` on
+   `com.apple.carkit.service` (entitlements `com.apple.private.carkit` and
+   `com.apple.springboard.testautomation`, both honoured when linked into a
+   simulator binary's `__TEXT,__entitlements`; descriptor
+   `{deviceID, screens:[{identifier}], extraHostProperties:{screens:[…]}}`,
+   torn down when the caller exits). It starts a session with a car at
+   `fe80::1%lo0` port 7000 and dies at
+   `com.apple.carkit.sessionRequestHandler … No such process`: the AirPlay
+   sender daemon is not in the simulator runtime (its frameworks are;
+   `AirPlaySenderService.xpc` is an empty bundle).
+3. **Forcing it gets as far as scenes.** With a stand-in `CARSession`
+   injected into CarPlayApp (configuration built by CarKit's own
+   `initWithSessionStatusOptions:propertySupplier:` from `uniqueID`,
+   `details.width/height/hasTouchScreen…`) and `sessionDidConnect:` /
+   `sessionController:didConnectSession:` driven by hand, DashBoard builds
+   its wallpaper scene and input routing on `Car[3-1]`. It still renders
+   nothing — because of 4.
+4. **No external screen renders pixels under Xcode 27.** Not CarPlay,
+   not plain TVOut mirroring the phone, on iOS 27 or 26.4, through
+   `simctl io screenshot`, baguette's capture, or a frame subscription.
+   backboardd reports the display on and cloning; the host IOSurface stays
+   black. DeviceKit tracks `displayIdentifiersWithFramebufferRequests` and
+   reaches non-primary displays through a video stream
+   (`receiveMirroredDisplayByIdentifier`), so Xcode 27 likely needs a
+   request baguette doesn't make yet. **This blocks every simulator
+   CarPlay route**; it's the next thing to crack.
+
+### Being the car: PlayPort and its family
+
+Tested 2026-10-02 on macOS 27 with a USB-attached iPhone 13 Pro Max
+(iOS 27). Scripts and logs weren't committed.
+
+[PlayPort](https://github.com/youcci/playport) streams real-iPhone CarPlay
+into a browser, and its frame is exactly the CarPlay screen: it plays the
+**car**, tells the phone the size it wants in its AirPlay `/info` reply,
+and the phone encodes only that screen as H.264. Nothing is cropped,
+because there is no window. It is a JVM port of
+[DiPlay](https://github.com/shihabal3amri/DiPlay) / xcertplay;
+[LoopLink](https://github.com/umarz317/LoopLink) is the same receiver as an
+Android head-unit app. All of them are GPL-3.0.
+
+**They can't help the simulator.** A receiver needs a phone that sends
+AirPlay, and the simulator runtime has no AirPlay sender (carkitd's
+synthetic session dies at `No such process`, above), and no iAP2,
+accessory or Bluetooth daemon either.
+
+**With a real iPhone it works end to end; the accessory identity is
+what decides it.** Run step by step on this Mac with PlayPort unchanged,
+first with a self-signed `identity.pk8` / `certificate.p7b`, then with an
+Apple-issued pair (`O=Apple Inc., OU=Apple Accessories`):
+
+| Step | Result |
+| --- | --- |
+| PlayPort advertises `_airplay._tcp` | ✅ (on a spare `--airplay-port`; macOS's AirPlay Receiver holds 7000) |
+| `bt-bridge` finds the phone's "Wireless iAP v2" SDP record | ✅ only after a fresh `performSDPQuery` — it reads the Mac's cached records, and a stale cache reports "does not expose the iAP2 service" |
+| RFCOMM channel opens, iAP2 link comes up | ✅ |
+| The phone accepts the accessory certificate | self-signed: ❌ `AuthenticationFailed`, the phone shows **Accessory Not Supported**. Apple-issued: ✅ `wireless bootstrap accepted` |
+| Wi-Fi handoff | ✅ only with the passphrase: the phone refuses a handoff to a secured network without one (`passphrase is required for secured Wi-Fi`), even a network it already knows. macOS also hides the SSID from a process without Location Services, so both are passed explicitly |
+| AirPlay `pair-setup` / `pair-verify` / `auth-setup`, encrypted control | ✅ the phone connects from its Wi-Fi address |
+| CarPlay session | ✅ `iPhone14,3`, iOS 27.0, about 4 s after start |
+| Video over PlayPort's `/ws` | ✅ H.264 1280×720 at ~27 fps (216 frames in 8 s); the first frame decodes to the bare CarPlay screen |
+
+That is the frame the pane wants: 1280×720 and nothing around it, against
+758×443 from cropping the CarPlay Simulator window (below). The resolution
+is whatever the receiver asks for in `/info`.
+
+The phone accepts only an Apple-issued accessory certificate. The pair
+PlayPort documents was extracted from Carlinkit dongle firmware and is
+shared publicly. Apple can revoke it in any iOS update, and it can't be
+redistributed. baguette doesn't fetch or ship it; whoever runs the
+receiver supplies their own and keeps it out of the repo.
+
+**USB doesn't avoid this.** Wired CarPlay runs the same iAP2 challenge over
+the cable, and the car's port must act as a USB *device* while the phone
+acts as host. A Mac's ports are host-only, which is why PlayPort supports
+only wireless, and why DiPlay's wired mode runs only on Android head units.
+
+The protocol side would port. CryptoKit, CommonCrypto and attaswift/BigInt
+reproduced PlayPort's X25519, Ed25519, HKDF-SHA512, ChaCha20-Poly1305,
+AES-CTR, SRP-6a (3072-bit) and P-256 identity signing byte for byte. On
+the platform side, `NWListener` Bonjour, VideoToolbox (decoding PlayPort's
+avcC + Annex B frames to IOSurface-backed buffers) and IOBluetooth RFCOMM
+all worked. A Swift port of GPL code stays GPL, so it could only ship as
+a separate helper process that loads a user-supplied identity.
+
+**Without an identity**, what works over USB is Apple's CarPlay Simulator, which
+attaches through Apple's own device connection and authenticates with
+Apple-signed credentials. Capturing its window is the
+[head-unit](../head-unit/design.md) design. To get only the CarPlay
+screen, crop the capture with `SCStreamConfiguration.sourceRect`. The
+screen has no accessibility element. Accessibility gives the toolbar (top
+52 pt) and the knob strip (from 527 pt), and the screen's exact edges come
+from the first frame: rows and columns where most pixels differ from the
+margin colour under the toolbar. Measured: 758×443 at ~27 fps on a 1×
+display.
+
 ## Known limits, and why
 
 - **Portrait externals are rejected.** `acceptsExternal` requires
@@ -414,6 +588,9 @@ symptom this whole feature exists to stop showing you.
   this side — but it does mean CarPlay's *brand chrome* (the
   `carplay-frames/` registry) may be dressing a screen that isn't
   CarPlay.
+- **On Xcode 27 the attach can't work at all** — there is no Simulator.app
+  to script — and even a screen lit by hand stays black. See
+  [Xcode 27](#xcode-27-no-simulatorapp-and-carplay-doesnt-come-up).
 - **CarPlay streams MJPEG regardless of the format picker.** It is a mostly
   static screen and H.264 starves without an IDR cadence the guest
   doesn't produce; MJPEG paints the first seed and holds it.
