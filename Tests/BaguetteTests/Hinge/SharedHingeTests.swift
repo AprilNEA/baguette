@@ -191,7 +191,10 @@ struct SharedHingeTests {
         w.cancel()
     }
 
-    @Test func `with no angle heard, a fold starts from shut`() throws {
+    /// devicectl cannot read a device in a custom set. Sweeping from an
+    /// assumed shut would fold an open device closed and hand the display
+    /// to the cover and back on the way to the angle asked for.
+    @Test func `with no angle heard, a fold goes straight to the angle asked for`() throws {
         let inner = Inner()
         given(inner.hinge).angle().willReturn(nil)
         let motor = MockHingeMotor()
@@ -200,7 +203,7 @@ struct SharedHingeTests {
 
         try shared.fold(to: 130, over: 0.8)
 
-        verify(motor).fold(from: .value(0), to: .value(130), over: .value(0.8)).called(1)
+        verify(motor).fold(from: .value(130), to: .value(130), over: .value(0.8)).called(1)
     }
 
     /// The same device always gets the same shared hinge, whoever asks.

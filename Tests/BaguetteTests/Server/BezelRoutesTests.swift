@@ -92,7 +92,7 @@ struct BezelRoutesTests {
         let orientation = MockOrientation()
         given(host).find(udid: .value("U")).willReturn(sim)
         given(sim).orientation().willReturn(orientation)
-        given(orientation).set(.value(.landscapeRight)).willReturn(true)
+        given(orientation).set(.value(.landscapeRight)).willReturn(.delivered)
 
         #expect(Server.applyOrientation(udid: "U", value: "landscape-right", simulators: host) == .ok)
         verify(orientation).set(.value(.landscapeRight)).called(1)
@@ -114,15 +114,26 @@ struct BezelRoutesTests {
         #expect(Server.applyOrientation(udid: "", value: "portrait", simulators: host) == .unknownDevice)
     }
 
-    @Test func `applyOrientation reports dispatchFailed when the orientation surface returns false`() {
+    @Test func `applyOrientation reports dispatchFailed when the orientation surface rejects the change`() {
         let host = MockSimulators()
         let sim = MockSimulator()
         let orientation = MockOrientation()
         given(host).find(udid: .value("U")).willReturn(sim)
         given(sim).orientation().willReturn(orientation)
-        given(orientation).set(.any).willReturn(false)
+        given(orientation).set(.any).willReturn(.rejected)
 
         #expect(Server.applyOrientation(udid: "U", value: "portrait", simulators: host) == .dispatchFailed)
+    }
+
+    @Test func `applyOrientation reports unconfirmed when the helper timed out`() {
+        let host = MockSimulators()
+        let sim = MockSimulator()
+        let orientation = MockOrientation()
+        given(host).find(udid: .value("U")).willReturn(sim)
+        given(sim).orientation().willReturn(orientation)
+        given(orientation).set(.any).willReturn(.unconfirmed)
+
+        #expect(Server.applyOrientation(udid: "U", value: "portrait", simulators: host) == .unconfirmed)
     }
 
     @Test func `applyShake dispatches through the simulator's shake surface`() async {

@@ -38,11 +38,13 @@ final class SharedHinge: Hinge, @unchecked Sendable {
         self.now = now
     }
 
-    /// A sweep starts where the hinge is — the angle last heard, or shut
-    /// when nothing has been heard, as the device boots.
+    /// A sweep starts where the hinge is — the angle last heard. With
+    /// nothing heard (devicectl cannot read a custom device set) the
+    /// hinge goes straight to the angle asked for rather than sweeping
+    /// from a guessed start.
     func fold(to degrees: Double, over duration: TimeInterval) throws {
         guard let motor else { throw HingeError.toolMissing }
-        let from = angle()?.degrees ?? 0
+        let from = angle()?.degrees ?? degrees
         try motor.fold(from: from, to: degrees, over: duration)
     }
 

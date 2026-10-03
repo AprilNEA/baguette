@@ -3,15 +3,12 @@ import Foundation
 
 /// `baguette orientation --udid <UDID> <portrait|landscape-left|landscape-right|portrait-upside-down>`
 ///
-/// Sends a `GSEventTypeDeviceOrientationChanged` Purple event to the
-/// booted simulator so the iOS guest sees `UIDeviceOrientationDidChange`
-/// and rotates the UIKit world. Wire format documented in
-/// `Domain/Orientation/OrientationEvent.swift`; the actual mach IPC
-/// is in `Infrastructure/Orientation/PurpleEventOrientation.swift`.
+/// Foldables use the guest pose helper; ordinary devices use PurpleWorkspace.
+/// Apps can keep their own interface orientation after successful dispatch.
 struct OrientationCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "orientation",
-        abstract: "Set the booted simulator's interface orientation"
+        abstract: "Set the booted simulator's orientation"
     )
 
     @OptionGroup var options: DeviceOption
@@ -29,11 +26,16 @@ struct OrientationCommand: ParsableCommand {
             log("Device \(simulator.name) is not booted")
             Foundation.exit(1)
         }
-        guard simulator.orientation().set(value) else {
-            log("Orientation change rejected (PurpleWorkspacePort unreachable?)")
-            Foundation.exit(1)
+        let delivery = simulator.orientation().set(value)
+        switch delivery {
+        case .delivered:
+            log("Set \(simulator.name) → \(value.wireName)")
+        case .rejected:
+            log("Orientation change rejected (event port or guest pose helper unavailable?)")
+        case .unconfirmed:
+            log("Orientation change unconfirmed; read the device state before retrying")
         }
-        log("Set \(simulator.name) → \(value.wireName)")
+        if delivery != .delivered { Foundation.exit(delivery.exitStatus) }
     }
 }
 

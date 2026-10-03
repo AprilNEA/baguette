@@ -5,71 +5,179 @@ import Mockable
 
 /// The hinge is moved from inside the guest: `HingeControl serve`, spawned
 /// once with `simctl spawn` and kept, registers a HID service shaped like
-/// dtuhidd's and plays every sweep it is written on stdin — so a pose
+/// dtuhidd's and plays every command it is written on stdin — so a pose
 /// change costs no spawn. The motor's job is that child: start it on the
-/// first sweep, write each sweep to it, start it again if it went away.
+/// first command, write each command to it and wait for its answer, stop
+/// it when it does not answer, and start it again if it went away.
 @Suite("GuestHingeMotor")
 struct GuestHingeMotorTests {
 
-    final class Captures: @unchecked Sendable {
+    /// A scripted helper: what it prints when started and in answer to
+    /// each command it is written.
+    final class Guest: @unchecked Sendable {
         var runs: [[String]] = []
         var executable: URL?
         var written: [String] = []
-        var settled: [TimeInterval] = []
+        var killed = 0
+        var stopped: [Int32] = []
+        var greeting: String? = "pid 4242\n"
+        var answer: (String) -> [String] = { _ in ["done 0\n"] }
+        var exitOnWrite: Int32?
+        var onBytes: (@Sendable (Data) -> Void)?
         var onExit: (@Sendable (Int32) -> Void)?
     }
 
-    private func make(tool: String? = "/tmp/builds/abc/HingeControl", spawnFails: Bool = false)
-        -> (GuestHingeMotor, Captures) {
+    private func make(deviceSetPath: String? = nil, tool: String? = "/tmp/builds/abc/HingeControl", spawnFails: Bool = false)
+        -> (GuestHingeMotor, Guest) {
         let sub = MockSubprocess()
-        let captures = Captures()
+        let guest = Guest()
         given(sub).runInteractive(executable: .any, arguments: .any, onBytes: .any, onExit: .any)
-            .willProduce { exe, args, _, onExit in
+            .willProduce { exe, args, onBytes, onExit in
                 if spawnFails { throw HingeError.toolFailed(status: 1) }
-                captures.executable = exe
-                captures.runs.append(args)
-                captures.onExit = onExit
+                guest.executable = exe
+                guest.runs.append(args)
+                guest.onBytes = onBytes
+                guest.onExit = onExit
+                if let greeting = guest.greeting { onBytes(Data(greeting.utf8)) }
             }
         given(sub).write(.any).willProduce { data in
-            captures.written.append(String(decoding: data, as: UTF8.self))
+            let line = String(decoding: data, as: UTF8.self)
+            guest.written.append(line)
+            for chunk in guest.answer(line) { guest.onBytes?(Data(chunk.utf8)) }
+            if let status = guest.exitOnWrite { guest.onExit?(status) }
         }
+        given(sub).kill().willProduce { guest.killed += 1 }
         given(sub).terminate().willReturn()
         let motor = GuestHingeMotor(
-            udid: "duo", subprocess: { sub }, tool: { tool }, settle: { captures.settled.append($0) })
-        return (motor, captures)
+            udid: "duo", deviceSetPath: deviceSetPath, subprocess: { sub }, tool: { tool },
+            helperTimeout: 0.05, now: { Date(timeIntervalSince1970: 1000) },
+            stopGuest: { guest.stopped.append($0) })
+        return (motor, guest)
     }
 
-    @Test func `the first sweep starts the guest tool serving; later ones are written to it`() throws {
-        let (motor, captures) = make()
+    @Test func `the first command starts the guest tool serving under a deadline; later ones are written to it`() throws {
+        let (motor, guest) = make()
         try motor.fold(from: 130, to: 0, over: 0.8)
         try motor.fold(from: 0, to: 180, over: 0.5)
-        #expect(captures.executable?.path == "/usr/bin/xcrun")
-        #expect(captures.runs == [["simctl", "spawn", "duo", "/tmp/builds/abc/HingeControl", "serve"]])
-        #expect(captures.written == ["sweep 130 0 800\n", "sweep 0 180 500\n"])
+        #expect(guest.executable?.path == "/usr/bin/xcrun")
+        #expect(guest.runs == [["simctl", "spawn", "duo", "/tmp/builds/abc/HingeControl", "--deadline", "1000.05", "serve"]])
+        #expect(guest.written == ["sweep 130 0 800\n", "sweep 0 180 500\n"])
+    }
+
+    @Test func `custom device sets scope the helper launch that rotation and folding share`() throws {
+        let (motor, guest) = make(deviceSetPath: "/tmp/custom devices")
+        try motor.turn(to: .portrait)
+        try motor.fold(from: 0, to: 130, over: 0.5)
+        #expect(guest.runs == [
+            ["simctl", "--set", "/tmp/custom devices", "spawn", "duo", "/tmp/builds/abc/HingeControl", "--deadline", "1000.05", "serve"],
+        ])
+        #expect(guest.written == ["orientation portrait\n", "sweep 0 130 500\n"])
+    }
+
+    @Test func `shared motors are isolated by device set and device identifier`() {
+        let udid = UUID().uuidString
+        let a = GuestHingeMotor.forDevice(udid, deviceSetPath: "/sets/a")
+        #expect(a === GuestHingeMotor.forDevice(udid, deviceSetPath: "/sets/a"))
+        #expect(a !== GuestHingeMotor.forDevice(udid, deviceSetPath: "/sets/b"))
+        #expect(a !== GuestHingeMotor.forDevice(udid))
+        #expect(a !== GuestHingeMotor.forDevice(UUID().uuidString, deviceSetPath: "/sets/a"))
     }
 
     @Test func `a hardware key is pressed as Device Hub presses it, for as long as asked`() throws {
-        let (motor, captures) = make()
+        let (motor, guest) = make()
         try motor.press(HIDUsage(page: 12, usage: 233), hold: 0.25)
         try motor.press(HIDUsage(page: 0xFF00, usage: 0x66), hold: 1.5)
-        #expect(captures.written == ["button 12 233 250\n", "button 65280 102 1500\n"])
-        // The call outlives the hold, so a one-shot CLI press is not cut
-        // off with the key down. (The first wait is the tool's start.)
-        #expect(captures.settled == [0.15, 0.3, 1.55])
+        #expect(guest.written == ["button 12 233 250\n", "button 65280 102 1500\n"])
     }
 
-    @Test func `turning the guest is written the same way`() throws {
-        let (motor, captures) = make()
+    @Test(arguments: [
+        (DeviceOrientation.portrait, "portrait"),
+        (.portraitUpsideDown, "pud"),
+        (.landscapeLeft, "landscape-right"),
+        (.landscapeRight, "landscape-left"),
+    ])
+    func `rotation uses the native physical orientation values`(
+        orientation: DeviceOrientation, native: String
+    ) throws {
+        let (motor, guest) = make()
+        try motor.turn(to: orientation)
+        #expect(guest.written == ["orientation \(native)\n"])
+        // Measured UIDevice values for the native guest commands. The phone
+        // backend sends DeviceOrientation.rawValue directly through Purple.
+        let physicalValues: [String: UInt32] = [
+            "portrait": 1, "pud": 2, "landscape-left": 3, "landscape-right": 4,
+        ]
+        #expect(physicalValues[native] == orientation.rawValue)
+    }
+
+    @Test func `a command the guest refuses is an error carrying its status`() {
+        let (motor, guest) = make()
+        guest.answer = { _ in ["done 1\n"] }
+        #expect(throws: HingeError.toolFailed(status: 1)) { try motor.turn(to: .portrait) }
+        guest.answer = { _ in ["done 2\n"] }
+        #expect(throws: HingeError.toolFailed(status: 2)) { try motor.fold(from: 0, to: 130, over: 0.5) }
+    }
+
+    @Test func `diagnostics and answers split across reads are understood`() throws {
+        let (motor, guest) = make()
+        guest.greeting = "runtime warning\npi"
+        guest.answer = { _ in ["d 4242\nbad line: x\ndo", "ne 0\n"] }
         try motor.turn(to: .landscapeLeft)
-        #expect(captures.written == ["orientation landscapeLeft\n"])
+    }
+
+    @Test func `a command that is not answered stops the guest helper and bounds the outcome`() throws {
+        let (motor, guest) = make()
+        guest.answer = { _ in [] }
+        #expect(throws: HingeError.toolTimedOut) { try motor.turn(to: .portrait) }
+        #expect(guest.stopped == [4242])
+        #expect(guest.killed == 1)
+        guest.answer = { _ in ["done 0\n"] }
+        try motor.turn(to: .portrait)
+        #expect(guest.runs.count == 2)
+    }
+
+    @Test func `a helper that never announced its pid is still abandoned`() {
+        let (motor, guest) = make()
+        guest.greeting = nil
+        guest.answer = { _ in [] }
+        #expect(throws: HingeError.toolTimedOut) { try motor.fold(from: 0, to: 130, over: 0) }
+        #expect(guest.stopped.isEmpty)
+        #expect(guest.killed == 1)
+    }
+
+    @Test func `a helper that ends without answering is an error, and the next command starts another`() throws {
+        let (motor, guest) = make()
+        guest.answer = { _ in [] }
+        guest.exitOnWrite = 164
+        #expect(throws: HingeError.toolFailed(status: 164)) { try motor.fold(from: 0, to: 130, over: 0.5) }
+        guest.answer = { _ in ["done 0\n"] }
+        guest.exitOnWrite = nil
+        try motor.fold(from: 130, to: 0, over: 0.5)
+        #expect(guest.runs.count == 2)
+    }
+
+    /// Under load a spawn can outlast the helper's deadline; it then exits
+    /// 3 having done nothing, which is a definite failure, not a timeout.
+    @Test func `a helper that started after its deadline reports that nothing was delivered`() {
+        let (motor, guest) = make()
+        guest.answer = { _ in [] }
+        guest.exitOnWrite = 3
+        #expect(throws: HingeError.toolStartedLate) { try motor.turn(to: .portraitUpsideDown) }
+        #expect(String(describing: HingeError.toolStartedLate)
+            == "HingeControl started after its deadline and did nothing; the command was not delivered.")
+    }
+
+    @Test func `a timeout says the stopped helper cannot act later`() {
+        #expect(String(describing: HingeError.toolTimedOut)
+            == "HingeControl did not answer in time; the command may have been delivered, but the stopped helper cannot deliver it later.")
     }
 
     @Test func `a tool that went away is started again for the next sweep`() throws {
-        let (motor, captures) = make()
+        let (motor, guest) = make()
         try motor.fold(from: 0, to: 130, over: 0.8)
-        captures.onExit?(0)
+        guest.onExit?(0)
         try motor.fold(from: 130, to: 0, over: 0.8)
-        #expect(captures.runs.count == 2)
+        #expect(guest.runs.count == 2)
     }
 
     @Test func `a missing tool or a failing spawn is an error`() {
