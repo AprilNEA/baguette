@@ -99,6 +99,7 @@ final class MotionSession {
     func stop(on simulator: any Simulator) async -> Bool {
         let target = armedSimulator ?? simulator
         armedSimulator = target
+        adoptPublished()
         if current == nil {
             ledger = .resuming(from: motion.published(), at: now())
         } else {
@@ -128,6 +129,7 @@ final class MotionSession {
 
     private func publish(kind: MotionKind, confidence: MotionConfidence, speed: Double,
                          on simulator: any Simulator) async {
+        adoptPublished()
         bankCurrentLeg()
         let intent = ledger.intent(kind: kind, confidence: confidence, speed: speed,
                                   startedAt: now())
@@ -143,6 +145,26 @@ final class MotionSession {
         current = intent
         phase = .publishing(kind)
         lastError = nil
+    }
+
+    /// Takes the guest's view of the leg in flight when it is a different
+    /// activity from this session's. A publish can write the shared intent
+    /// and then fail, so after a failed park the guest reads "stationary"
+    /// while `current` still says "walking"; banking that walk on the retry
+    /// would add steps for time spent standing still, and a failed change
+    /// of kind would bank the old activity. The published intent is what
+    /// the app saw, from the moment it was written.
+    ///
+    /// Only the activity is compared. A publish that failed *before*
+    /// writing leaves the same activity published, with the `startedAt`
+    /// the leg began at, while `current` was restarted at its last bank;
+    /// adopting that would count the banked seconds twice.
+    private func adoptPublished() {
+        guard let current, let published = motion.published(),
+            (published.kind, published.confidence, published.speed)
+                != (current.kind, current.confidence, current.speed)
+        else { return }
+        self.current = published
     }
 
     /// Rolls the leg in flight into the running totals, so the next intent

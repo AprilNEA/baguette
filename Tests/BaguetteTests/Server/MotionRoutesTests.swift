@@ -45,6 +45,7 @@ struct MotionRoutesTests {
         given(motion).publish(.any, on: .any).willProduce { intent, _ in
             captures.intents.append(intent)
         }
+        given(motion).published().willProduce { captures.last }
         given(motion).clear(on: .any).willReturn(())
         return Wiring(simulators: simulators, sim: sim, motion: motion,
                       sessions: MotionSessions(makeMotion: { _ in motion }),
@@ -159,6 +160,7 @@ struct MotionRoutesTests {
         let motion = MockMotion()
         given(motion).publish(.any, on: .any).willReturn(())
         given(motion).clear(on: .any).willThrow(SimulatorInjectionError.simctlFailed(status: 2))
+        given(motion).published().willProduce { nil }
         let sessions = MotionSessions(makeMotion: { _ in motion })
         _ = await Server.applyMotion(udid: "U", body: #"{"activity":"walking"}"#,
                                      simulators: simulators, sessions: sessions)
@@ -187,8 +189,8 @@ struct MotionRoutesTests {
 
     @Test func `stopMotion after a server restart parks and disarms the published motion`() async {
         let w = makeWiring()
-        given(w.motion).published().willReturn(
-            .stationary(startedAt: 1000, stepsBefore: 812, distanceBefore: 610))
+        // What the guest already reads from the previous server's run.
+        w.captures.intents.append(.stationary(startedAt: 1000, stepsBefore: 812, distanceBefore: 610))
 
         let outcome = await Server.stopMotion(
             udid: "U", simulators: w.simulators, sessions: w.sessions)

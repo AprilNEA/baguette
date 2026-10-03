@@ -146,4 +146,6 @@ active position — motion **can** be read back: the state is baguette's own.
 A first publish may write the shared motion intent and arm the dylib before
 it fails. The session keeps the cleanup responsibility: stopping still parks
 the device and disarms injection, and a failed cleanup stays available for
-retry.
+retry. A retry banks what the guest actually read: a park that wrote
+"stationary" before failing adds no steps for the time the device then stood
+still, and a failed change of kind banks the kind that was published.

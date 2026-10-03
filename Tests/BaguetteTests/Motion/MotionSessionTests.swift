@@ -196,6 +196,9 @@ struct MotionSessionTests {
             captures.intents.append(intent)
         }
         given(motion).clear(on: .any).willReturn(())
+        // A publish that fails before writing leaves the guest on the
+        // previous intent, which is what the session already holds.
+        given(motion).published().willProduce { captures.last }
         let sim = MockSimulator()
         given(sim).udid.willReturn("U")
         let clock = Clock()
@@ -228,6 +231,7 @@ struct MotionSessionTests {
             captures.intents.append(intent)
         }
         given(motion).clear(on: .any).willThrow(SimulatorInjectionError.simctlFailed(status: 2))
+        given(motion).published().willProduce { captures.last }
         let sim = MockSimulator()
         given(sim).udid.willReturn("U")
         let clock = Clock()
@@ -288,5 +292,68 @@ struct MotionSessionTests {
         #expect(disarmed)
         #expect(captures.last?.kind == .stationary)
         #expect(session.lastError == nil)
+    }
+
+    @Test func `a retry after a park that wrote before failing banks no steps for the standing time`() async {
+        let motion = MockMotion()
+        let captures = Captures()
+        var reject = false
+        let clock = Clock()
+        given(motion).publish(.any, on: .any).willProduce { intent, _ in
+            captures.intents.append(intent)
+            if reject { throw SimulatorInjectionError.simctlFailed(status: 2) }
+        }
+        given(motion).clear(on: .any).willReturn(())
+        given(motion).published().willProduce { captures.last }
+        let sim = MockSimulator()
+        given(sim).udid.willReturn("U")
+        let session = MotionSession(motion: motion, now: { clock.now })
+
+        await session.set(kind: .walking, confidence: .high, speed: 1.5, on: sim)
+        clock.now += 60
+        reject = true
+        #expect(await session.stop(on: sim) == false)
+        let parked = captures.last
+        #expect(parked?.kind == .stationary)
+        #expect((parked?.stepsBefore ?? 0) > 0)
+
+        // The guest has read "stationary" for a minute; the retry must not
+        // bank that minute as the walk the failed park replaced.
+        clock.now += 60
+        reject = false
+        #expect(await session.stop(on: sim))
+        #expect(captures.last?.kind == .stationary)
+        #expect(captures.last?.stepsBefore == parked?.stepsBefore)
+    }
+
+    @Test func `a failed change of kind banks the activity the guest actually read`() async {
+        let motion = MockMotion()
+        let captures = Captures()
+        var reject = false
+        let clock = Clock()
+        given(motion).publish(.any, on: .any).willProduce { intent, _ in
+            captures.intents.append(intent)
+            if reject { throw SimulatorInjectionError.simctlFailed(status: 2) }
+        }
+        given(motion).clear(on: .any).willReturn(())
+        given(motion).published().willProduce { captures.last }
+        let sim = MockSimulator()
+        given(sim).udid.willReturn("U")
+        let session = MotionSession(motion: motion, now: { clock.now })
+
+        await session.set(kind: .walking, confidence: .high, speed: 1.5, on: sim)
+        clock.now += 60
+        reject = true
+        await session.set(kind: .running, confidence: .high, speed: 3.0, on: sim)
+        #expect(captures.last?.kind == .running)
+        #expect(session.lastError != nil)
+
+        clock.now += 60
+        reject = false
+        #expect(await session.stop(on: sim))
+        let expected = MotionLedger(steps: 0, metres: 0)
+            .banking(captures.intents[0], at: 1060)
+            .banking(captures.intents[1], at: 1120)
+        #expect(captures.last?.stepsBefore == expected.steps)
     }
 }
