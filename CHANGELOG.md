@@ -15,6 +15,7 @@ For releases prior to this changelog, see the
 
 ### Fixed
 - `describe-ui` frames and point queries use native panel (HID) coordinates in all four orientations, and results report the observed `screen` size, orientation and target; missing or changing geometry fails instead of scaling the application root. → [docs](docs/features/accessibility/README.md)
+- Injected dylibs no longer disarm each other: `DYLD_INSERT_LIBRARIES` is read with stdout and stderr kept apart, an unreadable environment fails the update instead of being overwritten; `network status` reports a failed query. → [docs](docs/features/camera/design.md#sharing-dyld_insert_libraries)
 
 ---
 
