@@ -139,7 +139,9 @@ Wire JSON              Domain                   Infrastructure
 
 ## Phase 1: Domain TDD
 
-Write the failing test FIRST, in `Tests/BaguetteTests/<Context>/`.
+Write the failing test FIRST, in `Tests/BaguetteTests/<Context>/`, named
+`should <outcome> [when <situation>]` in domain language — see
+[Naming tests](references/tdd-patterns.md#naming-tests).
 
 Patterns that already exist — match them:
 
@@ -164,7 +166,7 @@ Example test rhythm (from `KeyboardTests.swift`):
 ```swift
 @Suite("KeyboardKey")
 struct KeyboardKeyTests {
-    @Test func `parses lowercase letter wire codes onto HID page 7`() {
+    @Test func `should map a lowercase letter key onto the keyboard HID page`() {
         #expect(KeyboardKey.from(wireCode: "KeyA")?.hidUsage
             == HIDUsage(page: 7, usage: 0x04))
     }
