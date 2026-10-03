@@ -14,15 +14,17 @@ import CoreGraphics
 ///
 /// Recipe (per call):
 ///
-///   1. Generate a fresh UUID token; register it → SimDevice in the
-///      shared dispatcher.
-///   2. Call `-frontmostApplicationWithDisplayId:bridgeDelegateToken:`.
-///      The translator stores the token internally and, on every XPC
-///      request, asks the dispatcher "what device for this token?".
-///   3. Set the same token as `bridgeDelegateToken` on the returned
-///      translation object — children inherit it, but the translator
-///      re-reads it for every sub-request, so missing this means
-///      child element reads silently fail.
+///   1. Ask the guest window server for its frontmost PID through a
+///      fresh `HingeControl frontmost` process (`GuestFrontmost`). On
+///      iOS 26.5 the bridge's own frontmost request can answer empty
+///      while its application-by-PID requests work.
+///   2. Request that application's translation from the SimDevice
+///      directly (`TokenDispatcher.application(pid:…)`).
+///   3. Generate a fresh UUID token; register it → SimDevice in the
+///      shared dispatcher, and set it as `bridgeDelegateToken` on the
+///      translation — children inherit it, but the translator re-reads
+///      it for every sub-request, so missing this means child element
+///      reads silently fail.
 ///   4. Convert translation → `AXPMacPlatformElement` and walk
 ///      `accessibilityChildren`, propagating the token onto every
 ///      sub-translation.
@@ -42,6 +44,7 @@ import CoreGraphics
 final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
     private let udid: String
     private let host: any DeviceHost
+    private let deviceSetPath: String?
 
     /// Cap on tree-walk recursion depth. Real iOS screens rarely
     /// exceed 20–30 levels; the cap prevents pathological cycles.
@@ -65,10 +68,12 @@ final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
     init(
         udid: String,
         host: any DeviceHost,
+        deviceSetPath: String? = nil,
         displayGeometry: @escaping @Sendable () throws -> DisplayGeometry
     ) {
         self.udid = udid
         self.host = host
+        self.deviceSetPath = deviceSetPath
         self.displayGeometry = displayGeometry
     }
 
@@ -131,9 +136,10 @@ final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
     /// exit), translator + frontmost-app resolution, and the
     /// UIKit-point → native-panel-point `AXFrameTransform` setup.
     /// Returns `nil` if any setup step fails (framework not loaded,
-    /// device missing, frontmost app not resolvable, etc.); throws when
-    /// the display geometry cannot be observed or changes during the
-    /// read, because frames without a known screen are not usable.
+    /// device missing, no platform element for the translation); throws
+    /// when the display geometry cannot be observed or changes during
+    /// the read, and when the guest frontmost query or the application
+    /// lookup fails, because those name a cause the caller can act on.
     private func withAXPContext(
         _ body: (AXPContext) throws -> AXNode?
     ) throws -> AXNode? {
@@ -146,7 +152,12 @@ final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
             return nil
         }
         let geometry = try displayGeometry()
-
+        let pid = try GuestFrontmost.pid(udid: udid, deviceSetPath: deviceSetPath)
+        let translation = try Self.sharedDispatcher.application(
+            pid: pid, on: device, udid: udid, timeout: Self.xpcTimeoutSeconds
+        )
+        // Discovery has its own bounded lifetime; the tree's deadline
+        // starts once the root translation is in hand.
         let token = UUID().uuidString
         let deadline = Date().addingTimeInterval(Self.xpcTimeoutSeconds)
         Self.sharedDispatcher.register(device: device, token: token, deadline: deadline)
@@ -154,12 +165,6 @@ final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
 
         guard let translator = Self.sharedTranslator else { return nil }
 
-        guard let translation = Self.frontmostApplication(
-            translator: translator, token: token
-        ) else {
-            log("[ax] no frontmost application for udid=\(udid)")
-            return nil
-        }
         Self.stamp(token: token, on: translation)
 
         guard let frontmostRoot = Self.macPlatformElement(
@@ -383,19 +388,6 @@ final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
 
     // MARK: - AXPTranslator entry points
 
-    private static func frontmostApplication(
-        translator: NSObject, token: String
-    ) -> NSObject? {
-        let sel = NSSelectorFromString("frontmostApplicationWithDisplayId:bridgeDelegateToken:")
-        guard translator.responds(to: sel),
-              let imp = class_getMethodImplementation(type(of: translator), sel) else {
-            logErr("[ax] -frontmostApplicationWithDisplayId:bridgeDelegateToken: not found")
-            return nil
-        }
-        typealias Fn = @convention(c) (AnyObject, Selector, UInt32, AnyObject) -> AnyObject?
-        return unsafeBitCast(imp, to: Fn.self)(translator, sel, 0, token as NSString) as? NSObject
-    }
-
     private static func macPlatformElement(
         translator: NSObject, translation: NSObject
     ) -> NSObject? {
@@ -540,6 +532,37 @@ final class TokenDispatcher: NSObject, @unchecked Sendable {
         _ token: NSString
     ) -> AnyObject? {
         nil
+    }
+
+    /// The translation of one guest application, requested from its
+    /// SimDevice directly. AXPTranslator's own PID convenience sends an
+    /// empty bridge token, which cannot tell concurrent devices apart.
+    func application(pid: Int32, on device: NSObject, udid: String, timeout: Double) throws -> NSObject {
+        let selector = NSSelectorFromString("new")
+        guard let cls = NSClassFromString("AXPTranslatorRequest"),
+            let meta = object_getClass(cls),
+            let imp = class_getMethodImplementation(meta, selector)
+        else {
+            throw ApplicationFailure(udid: udid, pid: pid, cause: "AXPTranslatorRequest is unavailable")
+        }
+        typealias New = @convention(c) (AnyClass, Selector) -> Unmanaged<NSObject>
+        let request = unsafeBitCast(imp, to: New.self)(cls, selector).takeRetainedValue()
+        // AXP's application-by-PID request, as observed on the iOS 26 wire.
+        request.setValue(1, forKey: "requestType")
+        request.setValue(["pid": pid], forKey: "parameters")
+        guard let response = sendAccessibilityRequest(request, to: device, timeout: timeout) as? NSObject,
+            let translation = response.value(forKey: "translationResponse") as? NSObject
+        else {
+            throw ApplicationFailure(udid: udid, pid: pid, cause: "the device returned no application translation")
+        }
+        return translation
+    }
+
+    private struct ApplicationFailure: LocalizedError {
+        let udid: String
+        let pid: Int32
+        let cause: String
+        var errorDescription: String? { "AX application lookup for \(udid) (PID \(pid)) failed: \(cause)" }
     }
 
     /// Synchronous wrapper around `SimDevice.sendAccessibilityRequestAsync:`.
