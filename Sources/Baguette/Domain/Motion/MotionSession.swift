@@ -89,21 +89,32 @@ final class MotionSession {
     ///   `false` the session is left intact so the caller can retry: a failed
     ///   disarm means the dylib is still loading into every app launched on
     ///   that simulator, and answering "stopped" would hide that.
+    ///
+    /// An explicit stop always parks and disarms, even when this session
+    /// never recorded a start: the guest keeps reading the published intent
+    /// across a server restart, and a first publish that wrote the intent
+    /// before failing left it armed. The totals then resume from what the
+    /// guest can already see, so the pedometer never jumps backwards.
     @discardableResult
-    func stop() async -> Bool {
-        guard case .publishing = phase, let simulator = armedSimulator else { return true }
-        bankCurrentLeg()
+    func stop(on simulator: any Simulator) async -> Bool {
+        let target = armedSimulator ?? simulator
+        armedSimulator = target
+        if current == nil {
+            ledger = .resuming(from: motion.published(), at: now())
+        } else {
+            bankCurrentLeg()
+        }
         let parked = MotionIntent.stationary(startedAt: now(), stepsBefore: ledger.steps,
                                             distanceBefore: ledger.metres)
         do {
-            try await motion.publish(parked, on: simulator)
+            try await motion.publish(parked, on: target)
             // Adopt the parked intent the moment it lands, before the disarm
             // is attempted. If the disarm then fails, the device really is
             // stationary — a retry must bank *that*, and banking the walk it
             // replaced would add steps for time spent standing still.
             current = parked
             phase = .publishing(.stationary)
-            try await motion.clear(on: simulator)
+            try await motion.clear(on: target)
         } catch {
             lastError = error.localizedDescription
             return false
@@ -120,6 +131,9 @@ final class MotionSession {
         bankCurrentLeg()
         let intent = ledger.intent(kind: kind, confidence: confidence, speed: speed,
                                   startedAt: now())
+        // A publish can write the shared intent and arm the dylib before it
+        // reports failure, so this session owns the cleanup from here on.
+        armedSimulator = simulator
         do {
             try await motion.publish(intent, on: simulator)
         } catch {
@@ -127,7 +141,6 @@ final class MotionSession {
             return
         }
         current = intent
-        armedSimulator = simulator
         phase = .publishing(kind)
         lastError = nil
     }
