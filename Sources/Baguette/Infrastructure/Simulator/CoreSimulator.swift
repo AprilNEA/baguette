@@ -20,6 +20,7 @@ final class CoreSimulator: Simulator, @unchecked Sendable {
     let state: SimulatorState
     let runtime: String
     let deviceTypeName: String
+    let metadata: SimulatorMetadata
 
     private let host: any DeviceHost
     private let deviceSetPath: String?
@@ -31,13 +32,15 @@ final class CoreSimulator: Simulator, @unchecked Sendable {
         runtime: String,
         deviceTypeName: String,
         host: any DeviceHost,
-        deviceSetPath: String? = nil
+        deviceSetPath: String? = nil,
+        metadata: SimulatorMetadata = SimulatorMetadata()
     ) {
         self.udid = udid
         self.name = name
         self.state = state
         self.runtime = runtime
         self.deviceTypeName = deviceTypeName
+        self.metadata = metadata
         self.host = host
         self.deviceSetPath = deviceSetPath
     }

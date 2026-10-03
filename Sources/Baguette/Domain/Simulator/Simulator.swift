@@ -26,6 +26,11 @@ protocol Simulator: Sendable {
     /// clone` / rename, so chrome lookup keys off this instead.
     var deviceTypeName: String { get }
 
+    /// Catalog identity from the installed device type and runtime.
+    /// Stable across `simctl` renames, unlike `name`; fields the host
+    /// did not populate are `nil`.
+    var metadata: SimulatorMetadata { get }
+
     func boot() throws
     func shutdown() throws
 

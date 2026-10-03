@@ -93,8 +93,10 @@ final class CoreSimulators: Simulators, DeviceHost, @unchecked Sendable {
         // returns the user-facing version string ("iOS 26.4"). Fall
         // back to the runtime identifier and finally to "" so the
         // field is always at least a string.
+        let runtime = device.value(forKey: "runtime") as? NSObject
+        let deviceType = device.value(forKey: "deviceType") as? NSObject
         let runtimeName =
-            (device.value(forKey: "runtime") as? NSObject).flatMap { rt -> String? in
+            runtime.flatMap { rt -> String? in
                 (rt.value(forKey: "name") as? String) ?? (rt.value(forKey: "versionString") as? String)
             } ?? ""
         // `deviceType.name` is the stable bundle filename — survives
@@ -103,7 +105,7 @@ final class CoreSimulators: Simulators, DeviceHost, @unchecked Sendable {
         // device with no `deviceType`) resolve to the same string they
         // did before.
         let deviceTypeName =
-            (device.value(forKey: "deviceType") as? NSObject)
+            deviceType
             .flatMap { $0.value(forKey: "name") as? String } ?? name
         return CoreSimulator(
             udid: udid,
@@ -112,7 +114,15 @@ final class CoreSimulators: Simulators, DeviceHost, @unchecked Sendable {
             runtime: runtimeName,
             deviceTypeName: deviceTypeName,
             host: self,
-            deviceSetPath: deviceSetPath
+            deviceSetPath: deviceSetPath,
+            // Identity from the installed catalog, read once per device: the
+            // identifiers survive a rename and `versionString` compares cleanly,
+            // while `runtime.version` is a packed integer.
+            metadata: SimulatorMetadata(
+                deviceTypeIdentifier: deviceType?.value(forKey: "identifier") as? String,
+                productFamily: deviceType?.value(forKey: "productFamily") as? String,
+                runtimeIdentifier: runtime?.value(forKey: "identifier") as? String,
+                runtimeVersion: runtime?.value(forKey: "versionString") as? String)
         )
     }
 

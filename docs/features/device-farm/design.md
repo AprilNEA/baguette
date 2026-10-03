@@ -4,6 +4,15 @@ description: Why the farm is a thin client over per-device streams, why the focu
 
 # Device Farm: design
 
+## Stable catalog identity
+
+The list envelope reads `deviceType.identifier`, `deviceType.productFamily`,
+`runtime.identifier` and `runtime.versionString` from each SimDevice. On Xcode
+26.6 `productFamily` is a string such as `iPhone`, and `runtime.version` is a
+packed integer, so version comparisons use `versionString`. Missing metadata
+stays `null`; a family is never derived from the user-editable name. The
+line-oriented `list` output keeps its four-field shape.
+
 ## Constraint: don't fork the streaming pipeline
 
 Each device's WebSocket already supports per-stream control (`set_bitrate` /

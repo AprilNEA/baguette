@@ -80,6 +80,14 @@ Input goes to the preview in the focus pane, never to grid tiles.
 Selecting a tile sends the FULL config over that device's stream socket;
 clearing focus drops it back to THUMB.
 
+### Catalog identity
+
+`baguette list --json` and `/simulators.json` include stable catalog metadata
+next to the editable `name`: `deviceTypeIdentifier`, `productFamily`,
+`runtimeIdentifier` and `runtimeVersion`. The values come from the installed
+CoreSimulator device type and runtime, so filtering by family or runtime keeps
+working after a device is renamed; unavailable metadata is `null`.
+
 ## HTTP / WebSocket
 
 | Method | Path | Returns |
