@@ -10,6 +10,10 @@ For releases prior to this changelog, see the
 
 ## [Unreleased]
 
+---
+
+## [0.2.2] - 2026-10-03
+
 ### Added
 - `baguette render-3d --screen` accepts `--hinge-degrees` and `--screen-orientation` to place saved screenshots on the active foldable panel, upright, with the requested fold. [Offline folded screenshots](docs/features/3d-rendering/models.md#offline-folded-screenshots).
 
@@ -52,6 +56,7 @@ For releases prior to this changelog, see the
 
 [0.1](docs/changelog/0.1.md)
 
-[Unreleased]: https://github.com/tddworks/baguette/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/tddworks/baguette/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/tddworks/baguette/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/tddworks/baguette/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tddworks/baguette/compare/v0.1.99...v0.2.0
