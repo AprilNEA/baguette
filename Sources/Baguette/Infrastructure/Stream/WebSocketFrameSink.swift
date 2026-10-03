@@ -194,8 +194,12 @@ final class WebSocketFrameSink: FrameSink, @unchecked Sendable {
                 do {
                     try await outbound.write(.binary(ByteBuffer(bytes: next)))
                 } catch {
-                    self?.stop()
+                    // A write can fail with the socket still open; report
+                    // and close rather than leave a client on a frozen
+                    // picture. On a socket that is already gone the report
+                    // and close fail too and are logged.
                     log("WebSocket frame delivery failed: \(error)")
+                    await self?.failAndClose(error)
                     return
                 }
             }
