@@ -65,7 +65,7 @@ baguette lifetime [--detach] [--shutdown]
 Read newline-delimited JSON gestures from stdin, ack each on stdout
 
 ```
-baguette input --udid <udid> [--display <display>] [--require-existing-display]
+baguette input --udid <udid> [--display <display>] [--require-existing-display] [--expected-screen <expected-screen>]
 ```
 
 | Flag | Required | Default | Description |
@@ -73,6 +73,7 @@ baguette input --udid <udid> [--display <display>] [--require-existing-display]
 | `--udid` | yes |  | Simulator UDID |
 | `--display` |  |  | Target display plane: phone \| carplay |
 | `--require-existing-display` |  |  | Require the target display to be attached; never enable CarPlay implicitly |
+| `--expected-screen` |  |  | Require fresh observations to match this describe-ui screen JSON before coordinate input |
 
 ## baguette stream
 
