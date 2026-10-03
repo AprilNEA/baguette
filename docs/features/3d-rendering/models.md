@@ -143,6 +143,34 @@ and the scene rolls the model to stand that way (`InterfaceRoll`);
 reports the `pose` shown;
 `set_3d_camera` may also name an `orientation` outright.
 
+## Offline folded screenshots
+
+A saved capture can be rendered without contacting a simulator:
+
+```bash
+baguette render-3d --screen inner-landscape.png --device iphone-duo \
+  --hinge-degrees 130 --screen-orientation landscape-left --output folded.png
+```
+
+The fold angle runs from 0 (closed) to 180 (flat). Below 90 degrees the
+capture is placed on the cover; otherwise it goes on the inner display.
+Supply a capture of that panel. This explicit pose does not infer simulator
+state or reproduce hinge hysteresis. Short of shut, the cover faces away from
+the default camera; turn the model toward it with `--rotation` (at 60°,
+`--rotation 0,60,0`).
+
+`--screen-orientation` names the interface orientation the capture was taken
+in: `portrait`, `landscape-left`, `landscape-right` or `portrait-upside-down`.
+The image is turned back onto the panel and the model rolled the way the
+device was held, so the capture renders upright, on ordinary phone models too;
+`--rotation` turns the model further. The canvas defaults to the capture's own
+size, which then matches the render's shape. Without the flag the image is
+placed as the panel's own buffer, as before. Both new flags require
+`--screen`; `--hinge-degrees` also requires a model with a foldable scene.
+
+On foldable models, `--screen-glass` applies only to the inner screen; it is
+left out when `--hinge-degrees` below 90° selects the cover panel.
+
 ## Variants
 
 Variants use one public set/choice vocabulary with two definition strategies:

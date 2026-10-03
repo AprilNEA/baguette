@@ -5,6 +5,92 @@ import Testing
 @Suite("DeviceRenderPlan")
 struct DeviceRenderPlanTests {
 
+    @Test(arguments: [(0.0, IntegratedPanel.primary), (89.0, .primary), (90.0, .secondary), (130.0, .secondary), (180.0, .secondary)])
+    func `saved fold poses select the corresponding screen`(angle: Double, panel: IntegratedPanel) throws {
+        let plan = try Self.foldPlan(angle: angle)
+        #expect(plan.screenPanel == panel)
+        #expect(plan.hingeDegrees == angle)
+        #expect(plan.screenRotation == .quarter)
+    }
+
+    /// A capture is saved upright in the orientation it was taken in. The
+    /// plan turns the image back to its panel's own buffer and rolls the
+    /// model as the guest was held (`InterfaceRoll`), on top of `--rotation`.
+    @Test(arguments: [
+        (180.0, DeviceOrientation.portrait, ScreenRotation.none, 90.0),
+        (180.0, .landscapeLeft, .quarter, 0.0),
+        (180.0, .portraitUpsideDown, .half, -90.0),
+        (180.0, .landscapeRight, .threeQuarters, 180.0),
+        (0.0, .portrait, .none, 0.0),
+        (0.0, .landscapeLeft, .quarter, -90.0),
+        (0.0, .portraitUpsideDown, .half, 180.0),
+        (0.0, .landscapeRight, .threeQuarters, 90.0),
+    ])
+    func `a capture's orientation turns its image and rolls a foldable upright`(
+        angle: Double, orientation: DeviceOrientation, turn: ScreenRotation, roll: Double
+    ) throws {
+        let plan = try Self.foldPlan(angle: angle, orientation: orientation, rotation: DeviceRotation(x: 5, y: 10, z: 20))
+        #expect(plan.screenRotation == turn)
+        #expect(plan.rotation == DeviceRotation(x: 5, y: 10, z: 20 + roll))
+    }
+
+    @Test func `an unfolded foldable rolls for its inner screen and a phone like a cover`() throws {
+        #expect(try Self.foldPlan(angle: nil, orientation: .portrait).rotation.z == 90)
+        let phone = try DeviceRenderPlan.build(
+            model: Self.installed(), variants: [:], rotation: .zero,
+            outputSize: RenderDimensions(width: 300, height: 400), screenOrientation: .landscapeLeft
+        )
+        #expect(phone.screenRotation == .quarter)
+        #expect(phone.rotation.z == -90)
+    }
+
+    @Test func `without an orientation the image and model are left as they are`() throws {
+        let plan = try Self.foldPlan(angle: 130, orientation: nil, rotation: DeviceRotation(x: 5, y: 10, z: 20))
+        #expect(plan.screenRotation == .none)
+        #expect(plan.rotation == DeviceRotation(x: 5, y: 10, z: 20))
+    }
+
+    @Test(arguments: [-1.0, 181.0, Double.infinity, Double.nan])
+    func `render plans reject invalid fold angles`(angle: Double) {
+        #expect(throws: DeviceModelError.invalidHingeAngle) {
+            _ = try Self.foldPlan(angle: angle)
+        }
+    }
+
+    /// The glass layer is shaped for the inner screen; over a pose that
+    /// lights the cover it floated beside the shut book.
+    @Test(arguments: [(nil as Double?, true), (180, true), (90, true), (89, false), (0, false)])
+    func `screen glass composites over the inner screen only`(angle: Double?, glass: Bool) throws {
+        let plan = try DeviceRenderPlan.build(
+            model: Self.installed(fold: DeviceModelFold(
+                clip: "fold", shutTime: 5, coverMaterial: "Cover",
+                coverTextureSize: RenderDimensions(width: 100, height: 200), openPoseDegrees: 130
+            )),
+            variants: [:], rotation: .zero, outputSize: RenderDimensions(width: 300, height: 400),
+            screenGlass: true, hingeDegrees: angle
+        )
+        #expect(plan.rendersScreenGlass == glass)
+    }
+
+    @Test func `an unspecified fold keeps the existing screen selection`() throws {
+        #expect(try Self.foldPlan(angle: nil).screenPanel == nil)
+    }
+
+    private static func foldPlan(
+        angle: Double?,
+        orientation: DeviceOrientation? = .landscapeLeft,
+        rotation: DeviceRotation = .zero
+    ) throws -> DeviceRenderPlan {
+        try DeviceRenderPlan.build(
+            model: installed(fold: DeviceModelFold(
+                clip: "fold", shutTime: 5, coverMaterial: "Cover",
+                coverTextureSize: RenderDimensions(width: 100, height: 200), openPoseDegrees: 130
+            )),
+            variants: [:], rotation: rotation, outputSize: RenderDimensions(width: 300, height: 400),
+            hingeDegrees: angle, screenOrientation: orientation
+        )
+    }
+
     @Test func `builds a render plan with mapped variants and requested camera`() throws {
         let model = Self.installed()
 
@@ -61,7 +147,7 @@ struct DeviceRenderPlanTests {
 }
 
 private extension DeviceRenderPlanTests {
-    static func installed() -> InstalledDeviceModel {
+    static func installed(fold: DeviceModelFold? = nil) -> InstalledDeviceModel {
         InstalledDeviceModel(
             definition: DeviceModelDefinition(
                 schemaVersion: 1,
@@ -75,7 +161,8 @@ private extension DeviceRenderPlanTests {
                     screenMaterial: "Screen",
                     nativeOrientation: .landscape,
                     textureSize: RenderDimensions(width: 3024, height: 1964),
-                    usesScreenOverlay: false
+                    usesScreenOverlay: false,
+                    fold: fold
                 ),
                 variantSets: [
                     DeviceVariantSet(

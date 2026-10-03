@@ -367,11 +367,13 @@ struct DeviceModelDefinition: Equatable, Sendable, Codable {
     }
 }
 
-enum DeviceModelError: Error, Equatable {
+enum DeviceModelError: Error, Equatable, LocalizedError {
     case malformedJSON
     case unsupportedSchemaVersion(Int)
     case emptyField(String)
     case invalidTextureSize
+    case modelCannotFold(String)
+    case invalidHingeAngle
     case invalidFold
     case invalidTextureRotation(Int)
     case missingAsset
@@ -408,4 +410,19 @@ enum DeviceModelError: Error, Equatable {
     case invalidVariantDefault(set: String, choice: String)
     case unknownVariantSet(String)
     case unknownVariantChoice(set: String, choice: String, allowed: [String])
+}
+
+extension DeviceModelError {
+    var errorDescription: String? {
+        switch self {
+        case .modelCannotFold(let model):
+            "Model '\(model)' cannot fold; omit --hinge-degrees or choose a foldable model."
+        case .invalidHingeAngle:
+            "The hinge angle must be finite and between 0 and 180 degrees."
+        case .screenImageInvalid:
+            "The screen image is not a readable PNG or JPEG."
+        default:
+            String(describing: self)
+        }
+    }
 }

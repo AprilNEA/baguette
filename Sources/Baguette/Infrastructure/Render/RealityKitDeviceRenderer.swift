@@ -14,18 +14,24 @@ struct RealityKitDeviceRenderer: DeviceRenderer, Sendable {
 
     func render(plan: DeviceRenderPlan, screenImage: Data) throws -> Data {
         let scene = try RealityKitDeviceScene(plan: plan, assets: assets)
+        if let hingeDegrees = plan.hingeDegrees { scene.update(hingeDegrees: hingeDegrees) }
         guard let source = CGImageSourceCreateWithData(screenImage as CFData, nil),
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
-              let surface = Self.surface(from: image) else {
+              let surface = Self.surface(from: image, rotation: plan.screenRotation) else {
             throw DeviceModelError.screenImageInvalid
         }
-        let rendered = try scene.render(screen: surface)
+        let rendered: IOSurface
+        if plan.screenPanel == .primary {
+            rendered = try scene.render(screens: FoldableScreens(unfolded: nil, cover: surface))
+        } else {
+            rendered = try scene.render(screen: surface)
+        }
         return try Self.png(from: rendered)
     }
 
-    private static func surface(from image: CGImage) -> IOSurface? {
-        let width = image.width
-        let height = image.height
+    static func surface(from image: CGImage, rotation: ScreenRotation = .none) -> IOSurface? {
+        let width = rotation.swapsDimensions ? image.height : image.width
+        let height = rotation.swapsDimensions ? image.width : image.height
         let bytesPerRow = ((width * 4 + 63) / 64) * 64
         guard let surface = IOSurfaceCreate([
             kIOSurfaceWidth: width,
@@ -47,7 +53,13 @@ struct RealityKitDeviceRenderer: DeviceRenderer, Sendable {
             bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
                 | CGBitmapInfo.byteOrder32Little.rawValue
         ) else { return nil }
-        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        context.translateBy(x: CGFloat(width) / 2, y: CGFloat(height) / 2)
+        context.rotate(by: CGFloat(rotation.rawValue) * .pi / 180)
+        context.interpolationQuality = .none
+        context.draw(image, in: CGRect(
+            x: -CGFloat(image.width) / 2, y: -CGFloat(image.height) / 2,
+            width: CGFloat(image.width), height: CGFloat(image.height)
+        ))
         return surface
     }
 

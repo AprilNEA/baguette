@@ -10,6 +10,9 @@ For releases prior to this changelog, see the
 
 ## [Unreleased]
 
+### Added
+- `baguette render-3d --screen` accepts `--hinge-degrees` and `--screen-orientation` to place saved screenshots on the active foldable panel, upright, with the requested fold. [Offline folded screenshots](docs/features/3d-rendering/models.md#offline-folded-screenshots).
+
 ### Fixed
 - `baguette orientation` now rotates iPhone Duo instead of reporting success without rotating. [Rotation](docs/features/hinge/README.md#rotation).
 - iPhone Duo `hinge`, rotation and hardware keys return once the guest has played the command and report a helper that failed to start; a helper that stops answering is stopped, so it cannot act after the command reports a timeout. [Hinge](docs/features/hinge/README.md)

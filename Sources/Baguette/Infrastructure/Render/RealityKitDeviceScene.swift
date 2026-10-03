@@ -310,7 +310,7 @@ final class RealityKitDeviceScene: DeviceScene, @unchecked Sendable {
             }
             foldController = subject.playAnimation(clip, transitionDuration: 0, startsPaused: true)
         }
-        if plan.screenGlass {
+        if plan.rendersScreenGlass {
             try Self.addCoverGlass(over: screen, subject: subject)
         }
 

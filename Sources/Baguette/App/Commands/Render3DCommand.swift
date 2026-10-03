@@ -17,6 +17,12 @@ struct Render3DCommand: AsyncParsableCommand {
     @Option(help: "Installed 3D model definition ID")
     var device: String?
 
+    @Option(help: "With --screen: the interface orientation the capture was taken in, so it renders upright.")
+    var screenOrientation: DeviceOrientation?
+
+    @Option(help: "With --screen and a foldable model: fold angle, 0 through 180 degrees")
+    var hingeDegrees: Double?
+
     @Option(help: "Custom CoreSimulator device-set path")
     var deviceSet: String?
 
@@ -58,6 +64,9 @@ struct Render3DCommand: AsyncParsableCommand {
         }
         if screen != nil, device == nil {
             throw ValidationError("--device is required with --screen")
+        }
+        if screen == nil, hingeDegrees != nil || screenOrientation != nil {
+            throw ValidationError("--hinge-degrees and --screen-orientation require --screen")
         }
         _ = try DeviceRenderArguments.rotation(rotation)
         if let size { _ = try DeviceRenderArguments.captureSize(size) }
@@ -125,7 +134,9 @@ struct Render3DCommand: AsyncParsableCommand {
             background: background == "transparent"
                 ? .transparent
                 : .color(background),
-            screenGlass: screenGlass
+            screenGlass: screenGlass,
+            hingeDegrees: hingeDegrees,
+            screenOrientation: screenOrientation
         )
         let png = try renderer.render(plan: plan, screenImage: screenImage)
         if let output {
