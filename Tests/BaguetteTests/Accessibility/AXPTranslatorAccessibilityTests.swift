@@ -34,6 +34,25 @@ struct AXPTranslatorAccessibilityErrorTests {
         }
     }
 
+    @Test func `an unobservable display fails the query instead of guessing a screen`() throws {
+        let host = MockDeviceHost()
+        given(host).resolveDevice(udid: .any).willReturn(NSObject())
+        let ax = AXPTranslatorAccessibility(udid: "ghost", host: host) {
+            throw ObservedScreenError.unavailable
+        }
+
+        // The geometry is read before any AXP work: a device that is present
+        // but cannot name its screen is an error, not an empty tree.
+        #expect(throws: ObservedScreenError.unavailable) { try ax.describeAll() }
+        #expect(throws: ObservedScreenError.unavailable) { try ax.describeAt(point: Point(x: 10, y: 20)) }
+    }
+
+    @Test func `a changed display tells the caller to observe again`() {
+        #expect(
+            AXPTranslatorAccessibility.Failure.displayChanged.localizedDescription
+                == "The display changed while reading accessibility; discard the result and observe again.")
+    }
+
     @Test func `describeAll returns nil when host has no matching device`() throws {
         let host = MockDeviceHost()
         given(host).resolveDevice(udid: .any).willReturn(nil)

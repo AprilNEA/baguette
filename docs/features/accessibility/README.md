@@ -40,7 +40,10 @@ device), so a later observation can be compared with this one. The
 geometry is read before and after the AX query; a rotation or panel change
 in between fails the query instead of returning frames for a screen that
 no longer exists. Missing or unknown geometry fails explicitly rather than
-assuming a phone-sized portrait panel.
+assuming a phone-sized portrait panel. On a foldable the observation needs
+a fresh hinge sample, which `devicectl` cannot provide for a custom device
+set; `describe-ui` on a foldable there reports the display as unavailable
+instead of guessing the cover panel.
 
 ## HTTP / WebSocket
 
