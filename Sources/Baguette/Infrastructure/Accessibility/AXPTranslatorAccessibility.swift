@@ -65,15 +65,23 @@ final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
     /// display resolve.
     private let displayGeometry: @Sendable () throws -> DisplayGeometry
 
+    /// The guest's current frontmost PID for a udid and device set;
+    /// `GuestFrontmost.pid` in production, a stub in tests.
+    private let frontmostPID: @Sendable (String, String?) throws -> Int32
+
     init(
         udid: String,
         host: any DeviceHost,
         deviceSetPath: String? = nil,
+        frontmostPID: @escaping @Sendable (String, String?) throws -> Int32 = {
+            try GuestFrontmost.pid(udid: $0, deviceSetPath: $1)
+        },
         displayGeometry: @escaping @Sendable () throws -> DisplayGeometry
     ) {
         self.udid = udid
         self.host = host
         self.deviceSetPath = deviceSetPath
+        self.frontmostPID = frontmostPID
         self.displayGeometry = displayGeometry
     }
 
@@ -152,7 +160,7 @@ final class AXPTranslatorAccessibility: Accessibility, @unchecked Sendable {
             return nil
         }
         let geometry = try displayGeometry()
-        let pid = try GuestFrontmost.pid(udid: udid, deviceSetPath: deviceSetPath)
+        let pid = try frontmostPID(udid, deviceSetPath)
         let translation = try Self.sharedDispatcher.application(
             pid: pid, on: device, udid: udid, timeout: Self.xpcTimeoutSeconds
         )
@@ -537,25 +545,34 @@ final class TokenDispatcher: NSObject, @unchecked Sendable {
     /// The translation of one guest application, requested from its
     /// SimDevice directly. AXPTranslator's own PID convenience sends an
     /// empty bridge token, which cannot tell concurrent devices apart.
-    func application(pid: Int32, on device: NSObject, udid: String, timeout: Double) throws -> NSObject {
-        let selector = NSSelectorFromString("new")
-        guard let cls = NSClassFromString("AXPTranslatorRequest"),
-            let meta = object_getClass(cls),
-            let imp = class_getMethodImplementation(meta, selector)
-        else {
+    func application(
+        pid: Int32, on device: NSObject, udid: String, timeout: Double,
+        request: (Int32) -> NSObject? = TokenDispatcher.applicationRequest
+    ) throws -> NSObject {
+        guard let request = request(pid) else {
             throw ApplicationFailure(udid: udid, pid: pid, cause: "AXPTranslatorRequest is unavailable")
         }
-        typealias New = @convention(c) (AnyClass, Selector) -> Unmanaged<NSObject>
-        let request = unsafeBitCast(imp, to: New.self)(cls, selector).takeRetainedValue()
-        // AXP's application-by-PID request, as observed on the iOS 26 wire.
-        request.setValue(1, forKey: "requestType")
-        request.setValue(["pid": pid], forKey: "parameters")
         guard let response = sendAccessibilityRequest(request, to: device, timeout: timeout) as? NSObject,
             let translation = response.value(forKey: "translationResponse") as? NSObject
         else {
             throw ApplicationFailure(udid: udid, pid: pid, cause: "the device returned no application translation")
         }
         return translation
+    }
+
+    /// AXP's application-by-PID request, as observed on the iOS 26 wire;
+    /// `nil` when the framework's request class is not loaded.
+    static func applicationRequest(pid: Int32) -> NSObject? {
+        let selector = NSSelectorFromString("new")
+        guard let cls = NSClassFromString("AXPTranslatorRequest"),
+            let meta = object_getClass(cls),
+            let imp = class_getMethodImplementation(meta, selector)
+        else { return nil }
+        typealias New = @convention(c) (AnyClass, Selector) -> Unmanaged<NSObject>
+        let request = unsafeBitCast(imp, to: New.self)(cls, selector).takeRetainedValue()
+        request.setValue(1, forKey: "requestType")
+        request.setValue(["pid": pid], forKey: "parameters")
+        return request
     }
 
     private struct ApplicationFailure: LocalizedError {

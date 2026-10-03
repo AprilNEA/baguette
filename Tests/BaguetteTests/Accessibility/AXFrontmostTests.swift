@@ -45,6 +45,16 @@ struct AXFrontmostTests {
         }
     }
 
+    @Test func `each failure names what went wrong`() {
+        #expect(
+            AXFrontmost.Failure.invalidPID(0).localizedDescription
+                == "The guest frontmost query returned an invalid process identifier: 0.")
+        #expect(GuestFrontmost.Failure.toolMissing.localizedDescription.contains("HingeControl guest helper is missing"))
+        #expect(
+            GuestFrontmost.Failure.invalidResponse(udid: "device", cause: "banner").localizedDescription
+                == "Frontmost application query for device returned invalid data: banner")
+    }
+
     @Test func `a missing or failed guest query is an explicit failure`() throws {
         #expect(throws: GuestFrontmost.Failure.toolMissing) {
             try GuestFrontmost.pid(udid: "device", tool: { nil })
