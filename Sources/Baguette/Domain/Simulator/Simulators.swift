@@ -44,6 +44,8 @@ extension Simulators {
 
 private extension Simulator {
     var dictionary: [String: Any] {
-        ["udid": udid, "name": name, "state": state.description, "runtime": runtime]
+        var result: [String: Any] = ["udid": udid, "name": name, "state": state.description, "runtime": runtime]
+        result.merge(metadata.dictionary) { _, value in value }
+        return result
     }
 }

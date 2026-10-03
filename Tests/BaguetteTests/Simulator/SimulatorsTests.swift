@@ -83,6 +83,7 @@ struct SimulatorsTests {
         given(s).name.willReturn(name)
         given(s).state.willReturn(state)
         given(s).runtime.willReturn(runtime)
+        given(s).metadata.willReturn(SimulatorMetadata())
         return s
     }
 }
