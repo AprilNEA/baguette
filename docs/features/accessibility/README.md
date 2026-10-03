@@ -45,6 +45,24 @@ a fresh hinge sample, which `devicectl` cannot provide for a custom device
 set; `describe-ui` on a foldable there reports the display as unavailable
 instead of guessing the cover panel.
 
+`baguette input --expected-screen '<screen JSON>'` pins coordinate input to
+that observation. The whole `screen` object goes in, `target` included. The
+session fails to start when the live screen differs, and every `down` and
+`move` re-observes the screen first: different native points, rotation,
+pixels or lit panel reject the gesture with `"screen target changed; observe
+again before sending new input"`. An envelope that names `width` / `height`
+must name the observed native points. A foldable needs a fresh hinge sample
+and exactly one framebuffer of the lit panel's size; it never falls back to
+the cover panel when the observation fails.
+
+The input process keeps its original HID registration and contact ids. If
+the panel changes during a touch, the next `move` fails but `up` still
+releases the original contact, so keep the process alive long enough to
+read that acknowledgement. A single-panel device re-reads its live screen
+properties without spawning `simctl`; a foldable samples the guest hinge,
+which is slower. Observation and HID dispatch are separate operations, so
+this detects observed changes without making the pair atomic.
+
 ## HTTP / WebSocket
 
 On the stream WebSocket (`/simulators/<udid>/stream`, framing in
