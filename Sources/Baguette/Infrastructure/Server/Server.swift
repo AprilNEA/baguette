@@ -2947,7 +2947,12 @@ struct Server: Sendable {
                     try? await outbound.write(.text(frame))
                     continue
                 }
-                await handleInbound(line: line, stream: stream, dispatcher: dispatcher)
+                do {
+                    try await handleInbound(line: line, stream: stream, dispatcher: dispatcher)
+                } catch {
+                    await sink.failAndClose(error)
+                    return
+                }
             }
         } catch {
             // socket closed; defer cleans up
@@ -3049,11 +3054,16 @@ struct Server: Sendable {
                     try? await outbound.write(.text(frame))
                     continue
                 }
-                await handleInbound(
-                    line: line,
-                    stream: stream,
-                    dispatcher: dispatcher
-                )
+                do {
+                    try await handleInbound(
+                        line: line,
+                        stream: stream,
+                        dispatcher: dispatcher
+                    )
+                } catch {
+                    await sink.failAndClose(error)
+                    return
+                }
             }
         } catch {
             // socket closed; defer cleans up
@@ -3519,14 +3529,17 @@ struct Server: Sendable {
     /// two-finger gestures actually ride, and it was dispatching raw.
     /// Only stream config and format verbs stay off the hop — they
     /// touch no AppKit state.
+    /// Throws when the stream rejects a retune; the route then reports
+    /// the error on the socket and closes it, because a codec that
+    /// refused its configuration cannot keep delivering valid frames.
     private static func handleInbound(
         line: String,
         stream: any Stream,
         dispatcher: GestureDispatcher
-    ) async {
+    ) async throws {
         let next = ReconfigParser.apply(line, to: stream.config)
         if next != stream.config {
-            stream.apply(next)
+            try stream.apply(next)
             return
         }
         if let data = line.data(using: .utf8),

@@ -23,6 +23,12 @@ For releases prior to this changelog, see the
 ### Fixed
 - `describe-ui` frames and point queries use native panel (HID) coordinates in all four orientations, and results report the observed `screen` size, orientation and target; missing or changing geometry fails instead of scaling the application root. → [docs](docs/features/accessibility/README.md)
 
+### Changed
+- Streams are paced before encoding: when capture outruns `--fps` only the newest unencoded surface is kept, the last pending frame still goes out after the source goes quiet, and `set_fps` retunes H.264 without resetting timestamps or the reference chain. → [docs](docs/features/stream/README.md)
+
+### Fixed
+- An AVCC WebSocket no longer drops H.264 reference frames for a slow consumer; it keeps them in order and closes with an error past 32 MiB. An encoder failure or a rejected runtime codec property ends the stream with an error instead of a frozen picture. → [docs](docs/features/stream/README.md)
+
 ---
 
 ## [0.2.2] - 2026-10-03
