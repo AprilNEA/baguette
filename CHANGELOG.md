@@ -17,6 +17,9 @@ For releases prior to this changelog, see the
 ### Fixed
 - Renamed simulators keep their 3D hardware model: definitions that target a named device are matched against the stable device type name before the editable display name. → [docs](docs/features/3d-rendering/models.md)
 
+### Fixed
+- `DELETE /simulators/:udid/motion` parks and disarms after a server restart and after a first publish that wrote the intent before failing, resuming the published pedometer totals; a failed cleanup stays retryable instead of being reported as stopped. → [docs](docs/features/motion/README.md)
+
 ---
 
 ## [0.2.2] - 2026-10-03
