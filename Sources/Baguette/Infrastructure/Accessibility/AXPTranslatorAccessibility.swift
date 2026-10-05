@@ -570,6 +570,11 @@ final class TokenDispatcher: NSObject, @unchecked Sendable {
         else { return nil }
         typealias New = @convention(c) (AnyClass, Selector) -> Unmanaged<NSObject>
         let request = unsafeBitCast(imp, to: New.self)(cls, selector).takeRetainedValue()
+        // A private class whose keys moved raises an uncatchable
+        // NSUnknownKeyException from `setValue(forKey:)`; refuse instead.
+        guard request.responds(to: NSSelectorFromString("setRequestType:")),
+            request.responds(to: NSSelectorFromString("setParameters:"))
+        else { return nil }
         request.setValue(1, forKey: "requestType")
         request.setValue(["pid": pid], forKey: "parameters")
         return request
