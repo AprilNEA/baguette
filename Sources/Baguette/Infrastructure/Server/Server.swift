@@ -432,7 +432,9 @@ struct Server: Sendable {
                     }
                     return Self.jsonResponse(json)
                 } catch {
-                    return errorJSON("network status failed: \(error)", status: .internalServerError)
+                    return errorJSON(
+                        "network condition applied; status read-back failed: \(error)",
+                        status: .internalServerError)
                 }
             case .invalidBody:
                 return errorJSON(
