@@ -29,6 +29,9 @@ For releases prior to this changelog, see the
 ### Fixed
 - An AVCC WebSocket no longer drops H.264 reference frames for a slow consumer; it keeps them in order and closes with an error past 32 MiB. An encoder failure or a rejected runtime codec property ends the stream with an error instead of a frozen picture. → [docs](docs/features/stream/README.md)
 
+### Fixed
+- Injected dylibs no longer disarm each other: `DYLD_INSERT_LIBRARIES` is read with stdout and stderr kept apart, an unreadable environment fails the update instead of being overwritten; `network status` reports a failed query. → [docs](docs/features/camera/design.md#sharing-dyld_insert_libraries)
+
 ---
 
 ## [0.2.2] - 2026-10-03
