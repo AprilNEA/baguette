@@ -60,7 +60,9 @@ and update hit geometry only when that decoded image is actually painted.
 Only unsubmitted renders can be replaced. Encoded reference frames are never
 dropped: a client exceeding the 32 MiB pending-message budget receives an
 error and the connection closes. Encoding uses the live 3D stream's 20 fps
-low-latency preset without B-frames. VideoToolbox setup, submission and output
+low-latency preset without B-frames; `set_fps`, `set_bitrate`, `set_scale`,
+`force_idr` and `snapshot` are answered with an error frame instead of being
+applied. VideoToolbox setup, submission and output
 failures terminate the stream instead of leaving stale interactive geometry.
 Apple's low-latency rate control forbids lookahead and frame reordering; this
 path does not request the optional `MaxFrameDelayCount` property, which the

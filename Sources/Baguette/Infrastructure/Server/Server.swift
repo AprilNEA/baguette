@@ -2877,8 +2877,12 @@ struct Server: Sendable {
                 do {
                     try await outbound.write(
                         .text(#"{"ok":false,"error":"\#(jsonEscape(String(describing: error)))"}"#))
-                    try await outbound.close(.unexpectedServerError, reason: "3D frame encoding failed")
                 } catch { log("3D stream error delivery failed: \(error)") }
+                // Close separately: a failed error write must not leave the
+                // socket open on a stream that no longer produces frames.
+                do {
+                    try await outbound.close(.unexpectedServerError, reason: "3D frame encoding failed")
+                } catch { log("3D stream close failed: \(error)") }
             }
         }
         let receiveFrame: @Sendable (Result<DeviceFrame, any Error>) -> Void
@@ -2994,6 +2998,15 @@ struct Server: Sendable {
                     line: line, pasteboard: pasteboard, input: input
                 ).resultFrame {
                     try? await outbound.write(.text(frame))
+                    continue
+                }
+                // Atomic frames run on a fixed encoder preset that the
+                // `stream` controls never reach; say so instead of
+                // acknowledging a retune that changed nothing.
+                if options.frameMetadata, ReconfigParser.isStreamControl(line) {
+                    try? await outbound.write(.text(
+                        #"{"ok":false,"error":"stream controls are not available with frameMetadata=1"}"#
+                    ))
                     continue
                 }
                 do {
