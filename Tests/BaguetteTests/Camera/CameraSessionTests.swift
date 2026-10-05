@@ -330,11 +330,58 @@ struct CameraSessionTests {
         let sessions = CameraSessions(guestTerminated: { _ in false })
         let first = makeWiring()
         let second = makeWiring()
-        let connected = try sessions.connect(udid: "U") { first.session }
-        #expect(throws: (any Error).self) { try sessions.connect(udid: "U") { second.session } }
-        #expect(throws: (any Error).self) { try sessions.connect(udid: "V") { second.session } }
+        let connected = try await sessions.connect(udid: "U") { first.session }
+        await #expect(throws: (any Error).self) { try await sessions.connect(udid: "U") { second.session } }
+        await #expect(throws: (any Error).self) { try await sessions.connect(udid: "V") { second.session } }
         await sessions.disconnect(connected)
-        #expect(try sessions.connect(udid: "V") { second.session } === second.session)
+        #expect(try await sessions.connect(udid: "V") { second.session } === second.session)
+    }
+
+    @Test func `a reconnect waits for the previous socket's teardown instead of being refused`() async throws {
+        final class Gate: @unchecked Sendable {
+            var continuation: CheckedContinuation<Void, Never>?
+            var reconnected = false
+        }
+        @MainActor final class DelayedInjection: SimulatorInjection {
+            let wrapped: MockSimulatorInjection
+            let gate: Gate
+            init(_ wrapped: MockSimulatorInjection, gate: Gate) {
+                self.wrapped = wrapped
+                self.gate = gate
+            }
+            func arm(dylibPath: String, on simulator: any Simulator) async throws {
+                try await wrapped.arm(dylibPath: dylibPath, on: simulator)
+            }
+            func disarm(dylibPath: String, on simulator: any Simulator) async throws {
+                await withCheckedContinuation { gate.continuation = $0 }
+                try await wrapped.disarm(dylibPath: dylibPath, on: simulator)
+            }
+            func armed(dylibPath: String, on simulator: any Simulator) async throws -> Bool {
+                try await wrapped.armed(dylibPath: dylibPath, on: simulator)
+            }
+        }
+        let gate = Gate()
+        let sessions = CameraSessions(guestTerminated: { _ in false })
+        let w = makeWiring(decorate: { DelayedInjection($0, gate: gate) })
+        given(w.injection).arm(dylibPath: .any, on: .any).willReturn(())
+        given(w.injection).disarm(dylibPath: .any, on: .any).willReturn(())
+        given(w.webcam).stop().willReturn(())
+        stubHappyCapture(w)
+        let first = try await sessions.connect(udid: "U") { w.session }
+        await first.start(source: Self.webcam, on: w.sim, dylibPath: "/tmp/vc.dylib")
+        let closing = Task { await sessions.disconnect(first) }
+        while gate.continuation == nil { await Task.yield() }
+        let other = makeWiring()
+        let reconnect = Task {
+            let session = try await sessions.connect(udid: "U") { other.session }
+            gate.reconnected = true
+            return session
+        }
+        for _ in 0..<10 { await Task.yield() }
+        #expect(!gate.reconnected)
+        gate.continuation?.resume()
+        await closing.value
+        #expect(try await reconnect.value === other.session)
     }
 
     @Test func `failed cleanup survives disconnect and only its device can recover it`() async throws {
@@ -349,21 +396,21 @@ struct CameraSessionTests {
         given(w.injection).disarm(dylibPath: .any, on: .any).willReturn(())
         given(w.webcam).stop().willReturn(())
         stubHappyCapture(w)
-        let connected = try sessions.connect(udid: "U") { w.session }
+        let connected = try await sessions.connect(udid: "U") { w.session }
         await connected.start(source: Self.webcam, on: w.sim, dylibPath: "/tmp/vc.dylib")
         await connected.stop()
         await sessions.disconnect(connected)
         verify(w.injection).disarm(dylibPath: .any, on: .any).called(1)
 
         let other = makeWiring()
-        #expect(throws: (any Error).self) { try sessions.connect(udid: "V") { other.session } }
-        let recovered = try sessions.connect(udid: "U") { other.session }
+        await #expect(throws: (any Error).self) { try await sessions.connect(udid: "V") { other.session } }
+        let recovered = try await sessions.connect(udid: "U") { other.session }
         #expect(recovered === connected)
         #expect(recovered.cleanupRequired)
         await recovered.stop()
         #expect(!recovered.cleanupRequired)
         await sessions.disconnect(recovered)
-        #expect(try sessions.connect(udid: "V") { other.session } === other.session)
+        #expect(try await sessions.connect(udid: "V") { other.session } === other.session)
     }
 
     @Test func `a disconnected camera owner is released only after guest termination is confirmed`() async throws {
@@ -375,18 +422,18 @@ struct CameraSessionTests {
                 .willThrow(NSError(domain: "disarm", code: 1))
             given(w.webcam).stop().willReturn(())
             stubHappyCapture(w)
-            let session = try sessions.connect(udid: "U") { w.session }
+            let session = try await sessions.connect(udid: "U") { w.session }
             await session.start(source: Self.webcam, on: w.sim, dylibPath: "/tmp/vc.dylib")
             // Even confirmed shutdown does not let another socket steal a live connection.
-            #expect(throws: CameraOwnershipError.self) { try sessions.connect(udid: "V") { makeWiring().session } }
+            await #expect(throws: CameraOwnershipError.self) { try await sessions.connect(udid: "V") { makeWiring().session } }
             await session.stop()
             await sessions.disconnect(session)
             #expect(session.cleanupRequired)
             let other = makeWiring()
             if terminated {
-                #expect(try sessions.connect(udid: "V") { other.session } === other.session)
+                #expect(try await sessions.connect(udid: "V") { other.session } === other.session)
             } else {
-                #expect(throws: CameraOwnershipError.self) { try sessions.connect(udid: "V") { other.session } }
+                await #expect(throws: CameraOwnershipError.self) { try await sessions.connect(udid: "V") { other.session } }
             }
             verify(w.injection).disarm(dylibPath: .any, on: .any).called(1)
         }
@@ -401,12 +448,12 @@ struct CameraSessionTests {
             .willThrow(NSError(domain: "disarm", code: 1))
         given(w.webcam).stop().willReturn(())
         stubHappyCapture(w)
-        let session = try sessions.connect(udid: "U") { w.session }
+        let session = try await sessions.connect(udid: "U") { w.session }
         await session.start(source: Self.webcam, on: w.sim, dylibPath: "/tmp/vc.dylib")
         await sessions.disconnect(session)
-        #expect(throws: (any Error).self) { try sessions.connect(udid: "V") { makeWiring().session } }
+        await #expect(throws: (any Error).self) { try await sessions.connect(udid: "V") { makeWiring().session } }
         #expect(session.cleanupRequired)
-        #expect(try sessions.connect(udid: "U") { makeWiring().session } === session)
+        #expect(try await sessions.connect(udid: "U") { makeWiring().session } === session)
         verify(w.injection).disarm(dylibPath: .any, on: .any).called(1)
     }
 

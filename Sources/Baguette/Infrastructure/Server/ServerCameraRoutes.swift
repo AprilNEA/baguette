@@ -62,7 +62,7 @@ extension Server {
         let cameras = AVCameras()
         let session: CameraSession
         do {
-            session = try sessions.connect(udid: udid) {
+            session = try await sessions.connect(udid: udid) {
                 CameraSession(
                     webcam: AVCameraCapture(),
                     image: ImageFileCapture(),

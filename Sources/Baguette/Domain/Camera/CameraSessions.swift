@@ -11,13 +11,18 @@ final class CameraSessions {
     }
 
     private var owner: Owner?
+    /// The disconnect still running for the current owner. A socket that
+    /// reconnects while the previous one is tearing down waits for that
+    /// outcome instead of being refused as a second live connection.
+    private var teardown: Task<Void, Never>?
     let guestTerminated: @Sendable (String) throws -> Bool
 
     nonisolated init(guestTerminated: @escaping @Sendable (String) throws -> Bool) {
         self.guestTerminated = guestTerminated
     }
 
-    func connect(udid: String, makeSession: () throws -> CameraSession) throws -> CameraSession {
+    func connect(udid: String, makeSession: () throws -> CameraSession) async throws -> CameraSession {
+        await teardown?.value
         if var existing = owner {
             guard !existing.connected else {
                 throw CameraOwnershipError(udid: existing.udid)
@@ -39,13 +44,18 @@ final class CameraSessions {
 
     func disconnect(_ session: CameraSession) async {
         guard owner?.session === session else { return }
-        // An explicit failed stop must not be retried merely by closing its socket.
-        if !session.cleanupRequired { await session.stop() }
-        if session.cleanupRequired {
-            owner?.connected = false
-        } else {
-            owner = nil
+        let task = Task { [self] in
+            // An explicit failed stop must not be retried merely by closing its socket.
+            if !session.cleanupRequired { await session.stop() }
+            if session.cleanupRequired {
+                owner?.connected = false
+            } else {
+                owner = nil
+            }
         }
+        teardown = task
+        await task.value
+        if teardown == task { teardown = nil }
     }
 }
 
