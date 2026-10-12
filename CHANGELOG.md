@@ -11,7 +11,7 @@ For releases prior to this changelog, see the
 ## [Unreleased]
 
 ### Added
-- `baguette defaults read|write|delete` reads and edits an app's persisted UserDefaults or an App Group suite, typed; `--relaunch` quits and relaunches the app so it sees the change. Also over `serve`. → [docs](docs/features/defaults/README.md) ([#96](https://github.com/tddworks/baguette/issues/96))
+- `baguette defaults read|write|delete` reads and edits an app's persisted UserDefaults or an App Group suite, typed; `--relaunch` quits and relaunches the app so it sees the change. Also over `serve`. → [docs](docs/features/defaults/README.md) ([#115](https://github.com/tddworks/baguette/pull/115))
 
 ---
 
