@@ -966,6 +966,7 @@ struct Server: Sendable {
         "carplay-frames",
         "carplay-frames/cupra",
         "carplay-frames/plain",
+        "defaults",
         "sim-list",
         "farm",
         "handheld",

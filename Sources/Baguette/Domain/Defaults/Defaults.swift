@@ -27,6 +27,10 @@ protocol Defaults: Sendable {
     /// Remove `key`. Throws `DefaultsError.simctlFailed` when it isn't
     /// stored — `PreferenceEdit` reads first so callers never see that.
     func delete(key: String, in suite: PreferenceSuite) async throws
+
+    /// The App Group identifiers the app has, sorted — the suites an
+    /// editor can offer beside the app's standard defaults.
+    func groups(of bundleID: String) async throws -> [String]
 }
 
 /// Why a defaults operation failed, each with the step the user can take.

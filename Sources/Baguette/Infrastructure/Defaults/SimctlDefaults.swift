@@ -44,6 +44,15 @@ final class SimctlDefaults: Defaults, @unchecked Sendable {
         _ = try await defaults(["delete", plist(of: suite), key])
     }
 
+    func groups(of bundleID: String) async throws -> [String] {
+        let (status, output) = try await capture(["simctl", "get_app_container", udid, bundleID, "groups"])
+        switch status {
+        case 0: return PreferenceSuite.groups(inListing: String(decoding: output, as: UTF8.self))
+        case 2: throw DefaultsError.appNotInstalled(bundleID: bundleID)
+        default: throw Self.failure(status)
+        }
+    }
+
     // MARK: - the two children
 
     /// The preferences plist inside the container simctl reports. Exit

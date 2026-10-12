@@ -40,6 +40,12 @@ struct DefaultsRoutesTests {
         }
         given(apps).terminate(bundleID: .any).willProduce { journal.steps.append("terminate \($0)") }
         given(apps).launch(bundleID: .any).willProduce { journal.steps.append("launch \($0)") }
+        given(apps).installed().willReturn([
+            InstalledApp(bundleIdentifier: "com.apple.mobilesafari", name: "Safari"),
+            InstalledApp(bundleIdentifier: "com.x.bench", name: "bench"),
+            InstalledApp(bundleIdentifier: "com.x.app", name: "Alpha"),
+        ])
+        given(defaults).groups(of: .any).willReturn(["group.x", "group.y"])
         return (simulators, journal)
     }
 
@@ -200,5 +206,59 @@ struct DefaultsRoutesTests {
             udid: "U", body: #"{"bundleId":"com.x","values":{"seen":false}}"#, simulators: simulators
         ) == .badRequest(PreferencesImportError.untyped(key: "seen").description))
         #expect(journal.steps.isEmpty)
+    }
+
+    // MARK: - what the editor card needs
+
+    @Test func `should list installed apps by name, marking Apple's own`() async {
+        let (simulators, _) = host()
+        let expected: String = #"{"apps":[{"bundleId":"com.x.app","name":"Alpha","system":false},"#
+            + #"{"bundleId":"com.x.bench","name":"bench","system":false},"#
+            + #"{"bundleId":"com.apple.mobilesafari","name":"Safari","system":true}]}"#
+        #expect(await Server.installedApps(udid: "U", simulators: simulators) == .ok(expected))
+    }
+
+    @Test func `should list an app's App Groups for the suite picker`() async {
+        let (simulators, _) = host()
+        #expect(await Server.defaultsGroups(udid: "U", query: ["bundleId": "com.x"], simulators: simulators)
+            == .ok(#"{"bundleId":"com.x","groups":["group.x","group.y"]}"#))
+    }
+
+    @Test func `should refuse to list groups without a bundle id`() async {
+        let (simulators, _) = host()
+        guard case .badRequest = await Server.defaultsGroups(udid: "U", query: [:], simulators: simulators) else {
+            Issue.record("expected badRequest"); return
+        }
+    }
+
+    @Test func `should carry plist text for collections when the editor asks`() async {
+        let (simulators, _) = host(stored: ["tags": .array([.bool(true)])])
+        #expect(await Server.readDefaults(
+            udid: "U", query: ["bundleId": "com.x", "plist": "1"], simulators: simulators
+        ) == .ok(#"{"bundleId":"com.x","values":{"tags":{"plist":"<array><true/></array>","type":"array","value":[{"type":"bool","value":true}]}}}"#))
+    }
+
+    @Test func `should relaunch an app on its own`() async {
+        let (simulators, journal) = host()
+        #expect(await Server.relaunchApp(udid: "U", query: ["bundleId": "com.x"], simulators: simulators)
+            == .ok(#"{"ok":true}"#))
+        #expect(journal.steps == ["terminate com.x", "launch com.x"])
+    }
+
+    @Test func `should report an unknown device when relaunching on an unknown udid`() async {
+        let (simulators, _) = host()
+        #expect(await Server.relaunchApp(udid: "nope", query: ["bundleId": "com.x"], simulators: simulators)
+            == .unknownDevice)
+    }
+
+    @Test func `should find the device in every defaults route's path`() {
+        for path in [
+            "/simulators/UDID-1/defaults.json", "/simulators/UDID-1/defaults",
+            "/simulators/UDID-1/apps.json", "/simulators/UDID-1/defaults-groups.json",
+            "/simulators/UDID-1/relaunch",
+        ] {
+            #expect(Server.udid(inPath: path) == "UDID-1", "\(path)")
+            #expect(Server.defaultsRoutePaths.contains(String(path.dropFirst("/simulators/UDID-1".count))), "\(path)")
+        }
     }
 }

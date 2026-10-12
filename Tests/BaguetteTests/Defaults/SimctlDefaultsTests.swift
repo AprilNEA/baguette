@@ -116,6 +116,19 @@ struct SimctlDefaultsTests {
         }
     }
 
+    @Test func `should list the App Groups an app has from simctl's groups listing`() async throws {
+        let (defaults, calls) = makeDefaults(container: "group.b\t/sim/G2\ngroup.a\t/sim/G1\n")
+        #expect(try await defaults.groups(of: "com.example.app") == ["group.a", "group.b"])
+        #expect(calls.argv == [["simctl", "get_app_container", "U", "com.example.app", "groups"]])
+    }
+
+    @Test func `should report an app that isn't installed when listing its groups`() async {
+        let (defaults, _) = makeDefaults(containerExit: 2)
+        await #expect(throws: DefaultsError.appNotInstalled(bundleID: "com.example.app")) {
+            try await defaults.groups(of: "com.example.app")
+        }
+    }
+
     @Test func `should report a simulator that isn't booted`() async {
         let (defaults, _) = makeDefaults(containerExit: 149)
         await #expect(throws: DefaultsError.deviceNotBooted) {

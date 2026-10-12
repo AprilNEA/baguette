@@ -56,16 +56,27 @@ public struct PreferenceSuite: Equatable, Sendable {
     public func plistPath(inContainerOutput output: String) -> String? {
         let container: String?
         if let group {
-            container = output.split(separator: "\n").lazy.compactMap { line -> String? in
-                let fields = line.split(separator: "\t", maxSplits: 1)
-                guard fields.count == 2, fields[0] == group else { return nil }
-                return String(fields[1])
-            }.first
+            container = Self.groupContainers(inListing: output).first { $0.group == group }?.path
         } else {
             container = output.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         guard let container, !container.isEmpty else { return nil }
         return container + "/Library/Preferences/\(name ?? bundleID).plist"
+    }
+
+    /// The App Groups an app has, sorted, from `get_app_container …
+    /// groups` output — what a suite picker offers.
+    public static func groups(inListing output: String) -> [String] {
+        groupContainers(inListing: output).map(\.group).sorted()
+    }
+
+    /// `<group id>\t<path>` lines, as `get_app_container … groups` prints them.
+    private static func groupContainers(inListing output: String) -> [(group: String, path: String)] {
+        output.split(separator: "\n").compactMap { line in
+            let fields = line.split(separator: "\t", maxSplits: 1)
+            guard fields.count == 2 else { return nil }
+            return (String(fields[0]), String(fields[1]))
+        }
     }
 
     private static func isIdentifier(_ text: String) -> Bool {

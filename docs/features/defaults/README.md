@@ -28,6 +28,11 @@ baguette defaults read   --udid <UDID> --bundle-id com.example.app \
   --suite group.com.example.shared --key token --json
 ```
 
+In `baguette serve`'s focus page, the toolbar's Defaults button (in the
+Inspect group) opens a card that does the same: pick an app and a suite, edit
+each value in place, add or delete keys, export or import a set, with
+"Relaunch app after each change" on by default.
+
 ## Workflows
 
 **Set up a scenario, then verify the UI.** Write each key with `--relaunch` on
@@ -82,6 +87,17 @@ POST   /simulators/<UDID>/defaults
 DELETE /simulators/<UDID>/defaults?bundleId=com.x[&suite=group.x]&key=seen[&relaunch=1]
        → {"ok":true,"removed":true}
 ```
+
+The card also uses:
+
+```
+GET    /simulators/<UDID>/apps.json                         → {"apps":[{"bundleId","name","system"}]}
+GET    /simulators/<UDID>/defaults-groups.json?bundleId=com.x → {"bundleId":"com.x","groups":["group.x"]}
+POST   /simulators/<UDID>/relaunch?bundleId=com.x            → {"ok":true}
+```
+
+`defaults.json?…&plist=1` adds each array or dictionary's `"plist"` text, so
+an editor can show it and post it back as `type: plist`.
 
 `value` may be a JSON string, number or boolean; it is read as `type`. Errors
 are `{"ok":false,"error":"…"}`: `400` bad identifier / type / value, `404`

@@ -14,9 +14,22 @@ extension Server {
     ///                                       or `{"bundleId","suite"?,"values":{…},"relaunch"?}` to import
     /// `DELETE /simulators/:udid/defaults?bundleId=…[&suite=…]&key=…[&relaunch=1]`
     ///
-    /// All three ride the browser-trust check and none is plugin-reachable:
+    /// And for the focus page's Defaults card:
+    /// `GET    /simulators/:udid/apps.json`                       installed apps, by name
+    /// `GET    /simulators/:udid/defaults-groups.json?bundleId=…` the app's App Groups
+    /// `POST   /simulators/:udid/relaunch?bundleId=…`             quit + launch
+    ///
+    /// Every path keeps the udid second-to-last (one segment after it),
+    /// the positional rule `udidParam` reads it by.
+    ///
+    /// All of them ride the browser-trust check and none is plugin-reachable:
     /// rewriting an app's preferences is not a capability any plugin
     /// declares today.
+    /// The path after `/simulators/:udid` of every route registered here.
+    static let defaultsRoutePaths: Set<String> = [
+        "/defaults.json", "/defaults", "/apps.json", "/defaults-groups.json", "/relaunch",
+    ]
+
     func registerDefaultsRoutes(
         on router: Router<BasicWebSocketRequestContext>,
         rejectUntrustedBrowser: @escaping @Sendable (Request) -> Response?
@@ -39,6 +52,28 @@ extension Server {
             ), udid: Self.udidParam(r))
         }
 
+        router.get("/simulators/:udid/apps.json") { r, _ in
+            if let rejected = rejectUntrustedBrowser(r) { return rejected }
+            return Self.defaultsResponse(
+                await Self.installedApps(udid: Self.udidParam(r), simulators: simulators),
+                udid: Self.udidParam(r)
+            )
+        }
+
+        router.get("/simulators/:udid/defaults-groups.json") { r, _ in
+            if let rejected = rejectUntrustedBrowser(r) { return rejected }
+            return Self.defaultsResponse(await Self.defaultsGroups(
+                udid: Self.udidParam(r), query: Self.defaultsQuery(r), simulators: simulators
+            ), udid: Self.udidParam(r))
+        }
+
+        router.post("/simulators/:udid/relaunch") { r, _ in
+            if let rejected = rejectUntrustedBrowser(r) { return rejected }
+            return Self.defaultsResponse(await Self.relaunchApp(
+                udid: Self.udidParam(r), query: Self.defaultsQuery(r), simulators: simulators
+            ), udid: Self.udidParam(r))
+        }
+
         router.delete("/simulators/:udid/defaults") { r, _ in
             if let rejected = rejectUntrustedBrowser(r) { return rejected }
             return Self.defaultsResponse(await Self.deleteDefaults(
@@ -49,7 +84,7 @@ extension Server {
 
     private static func defaultsQuery(_ r: Request) -> [String: String] {
         var query: [String: String] = [:]
-        for name in ["bundleId", "suite", "key", "relaunch"] {
+        for name in ["bundleId", "suite", "key", "relaunch", "plist"] {
             if let value = r.uri.queryParameters.get(name) { query[name] = String(value) }
         }
         return query
@@ -94,7 +129,8 @@ extension Server {
         guard !udid.isEmpty, let sim = simulators.find(udid: udid) else { return .unknownDevice }
         do {
             let preferences = try await sim.defaults().read(suite)
-            let json = query["key"].map(preferences.json(forKey:)) ?? preferences.json(in: suite)
+            let json = query["key"].map(preferences.json(forKey:))
+                ?? preferences.json(in: suite, plist: ["1", "true"].contains(query["plist"] ?? ""))
             return .ok(jsonString(json))
         } catch {
             return outcome(for: error)
@@ -184,6 +220,66 @@ extension Server {
         }
         return await apply(edit, udid: udid, simulators: simulators) {
             #"{"ok":true,"removed":\#($0)}"#
+        }
+    }
+
+    /// Every installed app, sorted by name for a picker. `system` marks
+    /// Apple's own (`com.apple.…`), so a picker can put the app under test
+    /// first.
+    static func installedApps(udid: String, simulators: any Simulators) async -> DefaultsOutcome {
+        guard !udid.isEmpty, let sim = simulators.find(udid: udid) else { return .unknownDevice }
+        do {
+            let apps = try await sim.apps().installed()
+                .sorted { $0.name.lowercased() < $1.name.lowercased() }
+                .map { app -> [String: Any] in
+                    ["bundleId": app.bundleIdentifier, "name": app.name,
+                     "system": app.bundleIdentifier.hasPrefix("com.apple.")]
+                }
+            return .ok(jsonString(["apps": apps]))
+        } catch {
+            return .failed("\(error)")
+        }
+    }
+
+    /// The App Groups an app has — the suites a picker offers beside its
+    /// standard defaults.
+    static func defaultsGroups(
+        udid: String, query: [String: String], simulators: any Simulators
+    ) async -> DefaultsOutcome {
+        let bundleID: String
+        do {
+            bundleID = try PreferenceSuite(bundleID: query["bundleId"] ?? "").bundleID
+        } catch {
+            return .badRequest("\(error)")
+        }
+        guard !udid.isEmpty, let sim = simulators.find(udid: udid) else { return .unknownDevice }
+        do {
+            let groups = try await sim.defaults().groups(of: bundleID)
+            return .ok(jsonString(["bundleId": bundleID, "groups": groups]))
+        } catch {
+            return outcome(for: error)
+        }
+    }
+
+    /// Quit and launch an app — the one-click fix when an edit was stored
+    /// without `relaunch` and the running app still holds the old value.
+    static func relaunchApp(
+        udid: String, query: [String: String], simulators: any Simulators
+    ) async -> DefaultsOutcome {
+        let bundleID: String
+        do {
+            bundleID = try PreferenceSuite(bundleID: query["bundleId"] ?? "").bundleID
+        } catch {
+            return .badRequest("\(error)")
+        }
+        guard !udid.isEmpty, let sim = simulators.find(udid: udid) else { return .unknownDevice }
+        do {
+            let apps = sim.apps()
+            try await apps.terminate(bundleID: bundleID)
+            try await apps.launch(bundleID: bundleID)
+            return .ok(#"{"ok":true}"#)
+        } catch {
+            return outcome(for: error)
         }
     }
 

@@ -1242,6 +1242,178 @@
   #simNativeView .network-host-close { width: 24px; height: 22px; color: var(--nv-text-muted); }
   #simNativeView #nativeNetworkHost { overflow-y: auto; padding: 2px 14px 12px; }
 
+  /* Defaults card — same floating-glass chrome as the status-bar and
+     network cards, a little wider for its key / type / value rows. Inner
+     styles are scoped under `.defaults-host` (.df-*). */
+  #simNativeView .defaults-host {
+    position: absolute;
+    top: 84px;
+    right: 24px;
+    z-index: 40;
+    width: 384px;
+    max-height: calc(100dvh - 120px);
+    display: flex; flex-direction: column;
+    background: var(--nv-bar-bg);
+    border: 1px solid var(--nv-bar-border);
+    border-radius: 14px;
+    box-shadow: var(--nv-bar-shadow), var(--nv-bar-inset);
+    backdrop-filter: blur(18px) saturate(1.5);
+    -webkit-backdrop-filter: blur(18px) saturate(1.5);
+    color: var(--nv-text);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-4px);
+    transition: opacity 0.16s ease, transform 0.16s ease;
+  }
+  #simNativeView[data-defaults="open"] .defaults-host {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+  #simNativeView .defaults-host-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 11px 12px 9px 14px;
+    border-bottom: 1px solid var(--nv-divider);
+  }
+  #simNativeView .defaults-host-title {
+    display: inline-flex; align-items: center; gap: 8px;
+    font: 600 13px/1.2 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+    letter-spacing: 0.01em;
+  }
+  #simNativeView .defaults-host-title svg { color: var(--nv-text-muted); }
+  #simNativeView .defaults-host-close { width: 24px; height: 22px; color: var(--nv-text-muted); }
+  #simNativeView #nativeDefaultsHost { overflow-y: auto; padding: 2px 14px 12px; }
+
+  #simNativeView .defaults-host .df-mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  #simNativeView .defaults-host .df-section { padding: 10px 0; border-top: 1px solid var(--nv-divider); }
+  #simNativeView .defaults-host .df-section:first-child { border-top: 0; }
+  #simNativeView .defaults-host .df-title {
+    display: flex; align-items: center; justify-content: space-between; margin: 0 0 8px;
+    color: var(--nv-text-faint);
+    font: 700 9.5px/1 -apple-system, sans-serif; letter-spacing: 0.10em; text-transform: uppercase;
+  }
+  #simNativeView .defaults-host .df-row { display: flex; align-items: center; gap: 10px; min-height: 30px; }
+  #simNativeView .defaults-host .df-row + .df-row { margin-top: 8px; }
+  #simNativeView .defaults-host .df-row[hidden] { display: none; }
+  #simNativeView .defaults-host .df-row > label,
+  #simNativeView .defaults-host .df-row > span:first-child {
+    flex: 0 0 44px; color: var(--nv-text-muted); font: 500 11px/1.2 -apple-system, sans-serif;
+  }
+  #simNativeView .defaults-host .df-other { align-items: flex-start; }
+  #simNativeView .defaults-host .df-other-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+  #simNativeView .defaults-host .df-field {
+    appearance: none; -webkit-appearance: none; flex: 1; min-width: 0; width: 100%; box-sizing: border-box;
+    background: var(--nv-fmt-track-bg); border: 1px solid var(--nv-bar-border);
+    border-radius: 8px; color: var(--nv-text);
+    font: 500 12px/1 -apple-system, sans-serif; padding: 6px 8px;
+  }
+  #simNativeView .defaults-host .df-field.df-mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px; }
+  #simNativeView .defaults-host select.df-field { cursor: pointer; }
+  #simNativeView .defaults-host .df-field:focus,
+  #simNativeView .defaults-host .df-value:focus,
+  #simNativeView .defaults-host textarea:focus { outline: none; border-color: var(--nv-accent); }
+  #simNativeView .defaults-host .df-hint {
+    color: var(--nv-text-muted); font: 400 11px/1.4 -apple-system, sans-serif;
+  }
+  #simNativeView .defaults-host .df-notice {
+    margin: 4px 0 2px; padding: 10px; border-radius: 9px;
+    font: 500 11.5px/1.45 -apple-system, sans-serif;
+  }
+  #simNativeView .defaults-host .df-notice[hidden] { display: none; }
+  #simNativeView .defaults-host .df-notice.df-danger { color: var(--nv-danger); border: 1px solid var(--nv-danger); }
+  #simNativeView .defaults-host .df-notice.df-warn { color: var(--nv-warn); border: 1px solid var(--nv-warn); }
+  #simNativeView .defaults-host .df-notice .df-chip { margin-top: 8px; }
+  #simNativeView .defaults-host .df-item { border-top: 1px solid var(--nv-divider); }
+  #simNativeView .defaults-host .df-item-main {
+    display: grid; grid-template-columns: minmax(0, 1fr) 46px 132px 22px;
+    align-items: center; gap: 8px; min-height: 38px;
+  }
+  #simNativeView .defaults-host .df-key {
+    font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #simNativeView .defaults-host .df-type {
+    justify-self: start; font-size: 10px; padding: 3px 6px; border-radius: 999px;
+    background: var(--nv-fmt-track-bg); color: var(--nv-text-muted);
+  }
+  #simNativeView .defaults-host .df-control {
+    display: flex; justify-content: flex-end; align-items: center; gap: 6px; min-width: 0;
+  }
+  #simNativeView .defaults-host .df-value {
+    width: 100%; min-width: 0; box-sizing: border-box;
+    background: var(--nv-fmt-track-bg); border: 1px solid var(--nv-bar-border);
+    border-radius: 7px; color: var(--nv-text); font-size: 11px; padding: 5px 7px;
+  }
+  #simNativeView .defaults-host .df-value.df-num { text-align: right; }
+  #simNativeView .defaults-host .df-value.df-bad { border-color: var(--nv-danger); }
+  #simNativeView .defaults-host .df-row-error {
+    color: var(--nv-danger); font: 500 11px/1.3 -apple-system, sans-serif;
+    text-align: right; padding: 0 30px 8px 0;
+  }
+  #simNativeView .defaults-host .df-size { font-size: 11px; color: var(--nv-text-muted); }
+  #simNativeView .defaults-host .df-chip {
+    display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+    border: 1px solid var(--nv-bar-border); background: var(--nv-fmt-track-bg); color: var(--nv-text);
+    border-radius: 7px; font: 600 10.5px/1 -apple-system, sans-serif; padding: 5px 7px; white-space: nowrap;
+  }
+  #simNativeView .defaults-host .df-chip:hover { background: var(--nv-btn-hover); }
+  #simNativeView .defaults-host .df-chevron { display: inline-flex; transition: transform 0.12s ease; }
+  #simNativeView .defaults-host .df-chevron.df-open { transform: rotate(180deg); }
+  #simNativeView .defaults-host .df-icon {
+    appearance: none; width: 22px; height: 22px; border: 0; border-radius: 6px; cursor: pointer;
+    background: transparent; color: var(--nv-text-faint);
+    display: inline-flex; align-items: center; justify-content: center; padding: 0;
+  }
+  #simNativeView .defaults-host .df-icon:hover { background: var(--nv-btn-hover); color: var(--nv-text); }
+  #simNativeView .defaults-host .df-delete:hover { color: var(--nv-danger); }
+  #simNativeView .defaults-host .df-switch {
+    appearance: none; flex: 0 0 auto; width: 36px; height: 21px; border: 0; border-radius: 999px;
+    padding: 2px; display: flex; justify-content: flex-start; cursor: pointer;
+    background: var(--nv-btn-active); transition: background 0.12s ease;
+  }
+  #simNativeView .defaults-host .df-switch[aria-checked="true"] { justify-content: flex-end; background: var(--nv-accent); }
+  #simNativeView .defaults-host .df-switch span {
+    width: 17px; height: 17px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+  #simNativeView .defaults-host .df-fragment { padding: 0 0 10px; }
+  #simNativeView .defaults-host .df-fragment textarea {
+    width: 100%; box-sizing: border-box; resize: vertical;
+    background: var(--nv-fmt-track-bg); border: 1px solid var(--nv-bar-border); border-radius: 8px;
+    color: var(--nv-text); font-size: 10.5px; line-height: 1.5; padding: 7px 8px;
+  }
+  #simNativeView .defaults-host .df-fragment-foot {
+    display: flex; justify-content: space-between; align-items: center; margin-top: 6px;
+  }
+  #simNativeView .defaults-host .df-empty { padding: 22px 12px; text-align: center; }
+  #simNativeView .defaults-host .df-empty b { display: block; font: 600 12.5px/1.3 -apple-system, sans-serif; margin-bottom: 6px; }
+  #simNativeView .defaults-host .df-add { display: grid; grid-template-columns: minmax(0, 1fr) 76px; gap: 6px; }
+  #simNativeView .defaults-host .df-add-value { grid-template-columns: minmax(0, 1fr) auto; margin-top: 6px; }
+  #simNativeView .defaults-host .df-primary {
+    appearance: none; border: 0; cursor: pointer; background: var(--nv-accent); color: var(--nv-accent-text);
+    border-radius: 8px; font: 600 12px/1 -apple-system, sans-serif; padding: 7px 14px;
+  }
+  #simNativeView .defaults-host .df-primary.df-sm { border-radius: 7px; font-size: 11px; padding: 6px 10px; }
+  #simNativeView .defaults-host .df-secondary {
+    appearance: none; cursor: pointer; border: 1px solid var(--nv-bar-border); background: transparent;
+    color: var(--nv-accent); border-radius: 8px; font: 600 12px/1 -apple-system, sans-serif; padding: 8px;
+  }
+  #simNativeView .defaults-host .df-secondary:hover { background: var(--nv-btn-hover); }
+  #simNativeView .defaults-host .df-relaunch { display: flex; align-items: flex-start; gap: 10px; }
+  #simNativeView .defaults-host .df-relaunch .df-switch { margin-top: 1px; }
+  #simNativeView .defaults-host .df-relaunch-title { font: 600 12px/1.3 -apple-system, sans-serif; margin-bottom: 2px; }
+  #simNativeView .defaults-host .df-status {
+    display: flex; align-items: center; gap: 6px; margin-top: 10px;
+    color: var(--nv-text-muted); font: 500 11px/1.4 -apple-system, sans-serif;
+  }
+  #simNativeView .defaults-host .df-status:empty { display: none; }
+  #simNativeView .defaults-host .df-status svg { flex: 0 0 auto; color: var(--nv-accent); }
+  #simNativeView .defaults-host .df-status.df-warn {
+    display: block; padding: 10px; border-radius: 9px; border: 1px solid var(--nv-warn); color: var(--nv-text);
+  }
+  #simNativeView .defaults-host .df-status.df-warn .df-primary { margin-top: 8px; }
+  #simNativeView .defaults-host .df-two {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 10px;
+  }
+
   #simNativeView .network-host .nw-section { padding: 10px 0 8px; }
   #simNativeView .network-host .nw-section + .nw-section {
     border-top: 1px solid var(--nv-divider);
@@ -2951,6 +3123,20 @@
         </svg>
       </button>
 
+<!-- Defaults toggle. Opens a card that reads and edits an installed
+           app's persisted UserDefaults (standard, App Group or own suite),
+           typed. Active = card open. Toggle-switch glyph. -->
+      <button class="ico-btn" id="nativeDefaultsToggle"
+              title="App defaults"
+              aria-label="Toggle app defaults"
+              onclick="window.__nativeToggleDefaults && window.__nativeToggleDefaults()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+             stroke-linecap="round" stroke-linejoin="round" width="17" height="17" aria-hidden="true">
+          <rect x="2.5" y="7" width="19" height="10" rx="5"/>
+          <circle cx="16.5" cy="12" r="2.6" fill="currentColor"/>
+        </svg>
+      </button>
+
       <button class="ico-btn" id="nativeLocationToggle"
               title="Simulated location"
               aria-label="Toggle simulated location"
@@ -3361,6 +3547,31 @@
       </button>
     </header>
     <div id="nativeNetworkHost"></div>
+  </aside>
+
+  <!-- Defaults card. DefaultsPanel (sim-defaults.js) is lazy-mounted into
+       #nativeDefaultsHost on first open; `[data-defaults="open"]` on the root
+       fades it in. -->
+  <aside id="nativeDefaultsSheet" class="defaults-host" aria-hidden="true" inert>
+    <header class="defaults-host-head">
+      <span class="defaults-host-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+             width="14" height="14" aria-hidden="true">
+          <rect x="2.5" y="7" width="19" height="10" rx="5"/>
+          <circle cx="16.5" cy="12" r="2.6" fill="currentColor"/>
+        </svg>
+        Defaults
+      </span>
+      <button class="ico-btn defaults-host-close" title="Close app defaults"
+              aria-label="Close app defaults"
+              onclick="window.__nativeToggleDefaults && window.__nativeToggleDefaults()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12">
+          <path d="M6 6 18 18"/><path d="M18 6 6 18"/>
+        </svg>
+      </button>
+    </header>
+    <div id="nativeDefaultsHost"></div>
   </aside>
 
   <!-- Simulated-location card — floating glass panel with a Leaflet map.

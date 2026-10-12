@@ -57,6 +57,15 @@ struct PreferenceSuiteTests {
         #expect(try PreferenceSuite(bundleID: "com.example.app").plistPath(inContainerOutput: "\n") == nil)
     }
 
+    @Test func `should list the App Groups an app has, in order`() {
+        #expect(PreferenceSuite.groups(inListing: """
+        group.b\t/Shared/AppGroup/G2
+        group.a\t/Shared/AppGroup/G1 with space
+
+        """) == ["group.a", "group.b"])
+        #expect(PreferenceSuite.groups(inListing: "") == [])
+    }
+
     @Test func `should refuse an identifier that could leave the container`() {
         for (bundleID, suite) in [
             ("", nil), ("../etc", nil), ("com/x", nil), ("-help", nil),
@@ -152,5 +161,18 @@ struct PreferencesTests {
         #expect(throws: PreferencesImportError.notAnObject) {
             try Preferences(importing: Data("[1]".utf8))
         }
+    }
+
+    @Test func `should carry a collection's plist text for an editor when asked`() throws {
+        let preferences = Preferences(values: ["tags": .array([.integer(1)]), "n": .integer(1)])
+        let json = preferences.json(in: try PreferenceSuite(bundleID: "com.x"), plist: true)
+        #expect(json as NSDictionary == [
+            "bundleId": "com.x",
+            "values": [
+                "tags": ["type": "array", "value": [["type": "int", "value": 1]],
+                         "plist": "<array><integer>1</integer></array>"],
+                "n": ["type": "int", "value": 1],
+            ],
+        ] as NSDictionary)
     }
 }

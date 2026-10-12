@@ -59,8 +59,18 @@ public struct Preferences: Equatable, Sendable {
     /// The whole suite as a read answers it — which app and suite it
     /// came from, then every value typed. `suite` is omitted for an
     /// app's standard defaults.
-    public func json(in suite: PreferenceSuite) -> [String: Any] {
-        var envelope: [String: Any] = ["bundleId": suite.bundleID, "values": json]
+    ///
+    /// With `plist`, each top-level array or dictionary also carries its
+    /// `"plist"` fragment, so an editor can show it as editable text and
+    /// post it back as `type: plist` without knowing plist itself.
+    public func json(in suite: PreferenceSuite, plist: Bool = false) -> [String: Any] {
+        let values = plist ? values.mapValues { value -> [String: Any] in
+            switch value {
+            case .array, .dictionary: return value.json.merging(["plist": value.xmlFragment]) { _, new in new }
+            default: return value.json
+            }
+        } : json
+        var envelope: [String: Any] = ["bundleId": suite.bundleID, "values": values]
         if let name = suite.name { envelope["suite"] = name }
         return envelope
     }
