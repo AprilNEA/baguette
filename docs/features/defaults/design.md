@@ -57,6 +57,13 @@ suite out of them (`PreferenceDomain.plistPath(inContainerOutput:)`). A suite
 missing from that listing is `groupNotFound`. That keeps a misspelt or
 unentitled group from silently landing in standard defaults.
 
+Only a suite starting `group.` is looked up this way. Apple requires that
+prefix on every App Group id, so any other suite
+(`UserDefaults(suiteName: "com.x.debug")`) is the app's own: CFPreferences
+keeps it in the app's data container as `Library/Preferences/<suite>.plist`.
+The split is decided by the name alone (`PreferenceDomain.group`), never by
+whether a lookup happened to succeed.
+
 ## Identifiers
 
 The bundle id and suite become a path component and a simctl argument, so
@@ -70,4 +77,3 @@ string.
   supported way to make it observe a change.
 - Only persisted values. Registered defaults, managed preferences, the Keychain
   and app databases are out of scope.
-- A suite name that differs from its group identifier (rare) isn't addressable.

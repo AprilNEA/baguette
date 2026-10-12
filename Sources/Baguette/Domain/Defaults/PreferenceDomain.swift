@@ -1,21 +1,31 @@
 import Foundation
 
-/// Which preferences: an app's standard defaults, or a named suite in one
-/// of its App Groups (`UserDefaults(suiteName: "group.…")`).
+/// Which preferences: an app's standard defaults, or a named suite —
+/// one of its App Groups (`UserDefaults(suiteName: "group.…")`) or a
+/// suite of its own.
 ///
 /// The domain never guesses a container path. CoreSimulator's
 /// `…/Containers/Data/Application/<uuid>/` layout is undocumented and the
 /// UUID changes on every reinstall, so `containerArguments` asks simctl
 /// for it; only the plist *inside* the reported container is ours to
-/// name. For a suite, simctl lists the groups the app's own entitlements
+/// name. For an App Group, simctl lists the groups the app's own entitlements
 /// grant, so a group the app doesn't belong to fails loudly instead of
 /// quietly landing in standard defaults.
 public struct PreferenceDomain: Equatable, Sendable {
     public let bundleID: String
-    /// The App Group suite, or `nil` for the app's standard defaults.
-    /// The suite name is the group identifier — the plist inside the
-    /// group's container is named for it.
+    /// A named suite, or `nil` for the app's standard defaults. A suite
+    /// starting `group.` is an App Group (Apple requires the prefix) and
+    /// lives in that group's container; any other suite
+    /// (`UserDefaults(suiteName: "com.example.debug")`) is the app's own
+    /// and lives in its data container. Either way the plist is named for
+    /// the suite.
     public let suite: String?
+
+    /// The App Group this suite lives in, or `nil` when the preferences
+    /// are in the app's own data container.
+    public var group: String? {
+        suite.flatMap { $0.hasPrefix("group.") ? $0 : nil }
+    }
 
     /// Both identifiers become a path component and a simctl argument, so
     /// anything that could climb out of the container (`/`, `..`) or read
@@ -32,23 +42,23 @@ public struct PreferenceDomain: Equatable, Sendable {
     }
 
     /// `xcrun` argv that prints where these preferences live: the app's
-    /// data container, or — for a suite — every App Group container the
-    /// app has, as `<group id>\t<path>` lines. simctl's own `<group id>`
-    /// form exits 117 even for a group the app has (Xcode 27), so the
-    /// suite is picked out of the listing instead.
+    /// data container, or — for an App Group suite — every App Group
+    /// container the app has, as `<group id>\t<path>` lines. simctl's own
+    /// `<group id>` form exits 117 even for a group the app has (Xcode
+    /// 27), so the group is picked out of the listing instead.
     public func containerArguments(udid: String) -> [String] {
-        ["simctl", "get_app_container", udid, bundleID, suite == nil ? "data" : "groups"]
+        ["simctl", "get_app_container", udid, bundleID, group == nil ? "data" : "groups"]
     }
 
     /// The preferences plist inside the container simctl printed, or
-    /// `nil` when it names none — for a suite, when the app's groups
-    /// don't include it.
+    /// `nil` when it names none — for an App Group suite, when the app's
+    /// groups don't include it.
     public func plistPath(inContainerOutput output: String) -> String? {
         let container: String?
-        if let suite {
+        if let group {
             container = output.split(separator: "\n").lazy.compactMap { line -> String? in
                 let fields = line.split(separator: "\t", maxSplits: 1)
-                guard fields.count == 2, fields[0] == suite else { return nil }
+                guard fields.count == 2, fields[0] == group else { return nil }
                 return String(fields[1])
             }.first
         } else {

@@ -108,6 +108,14 @@ struct SimctlDefaultsTests {
         #expect(calls.argv.count == 1)
     }
 
+    @Test func `should report a container it was never told for a suite that is not an App Group`() async {
+        let (defaults, _) = makeDefaults(container: "")
+        let suite = try! PreferenceDomain(bundleID: "com.example.app", suite: "com.example.debug")
+        await #expect(throws: DefaultsError.simctlFailed(status: 0)) {
+            try await defaults.read(suite)
+        }
+    }
+
     @Test func `should report a simulator that isn't booted`() async {
         let (defaults, _) = makeDefaults(containerExit: 149)
         await #expect(throws: DefaultsError.deviceNotBooted) {

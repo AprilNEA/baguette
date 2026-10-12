@@ -57,8 +57,8 @@ final class SimctlDefaults: Defaults, @unchecked Sendable {
         default: throw Self.failure(status)
         }
         guard let plist = domain.plistPath(inContainerOutput: String(decoding: output, as: UTF8.self)) else {
-            if let suite = domain.suite {
-                throw DefaultsError.groupNotFound(group: suite, bundleID: domain.bundleID)
+            if let group = domain.group {
+                throw DefaultsError.groupNotFound(group: group, bundleID: domain.bundleID)
             }
             throw DefaultsError.simctlFailed(status: status)
         }

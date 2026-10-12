@@ -23,6 +23,16 @@ struct PreferenceDomainTests {
             == ["simctl", "get_app_container", "U", "com.example.app", "groups"])
     }
 
+    @Test func `should look for a suite that is not an App Group in the app's own data container`() throws {
+        // `UserDefaults(suiteName: "com.example.debug")` — App Group ids
+        // always start with `group.`, so anything else is the app's own.
+        let domain = try PreferenceDomain(bundleID: "com.example.app", suite: "com.example.debug")
+        #expect(domain.containerArguments(udid: "U")
+            == ["simctl", "get_app_container", "U", "com.example.app", "data"])
+        #expect(domain.plistPath(inContainerOutput: "/data/Application/A1\n")
+            == "/data/Application/A1/Library/Preferences/com.example.debug.plist")
+    }
+
     @Test func `should keep standard defaults in the plist named for the app`() throws {
         let domain = try PreferenceDomain(bundleID: "com.example.app")
         #expect(domain.plistPath(inContainerOutput: "/data/Application/A1\n")

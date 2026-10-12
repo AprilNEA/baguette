@@ -4,8 +4,8 @@ description: Read, write and delete an installed app's persisted UserDefaults on
 
 # Defaults
 
-Prepare an app's persisted preferences (its standard `UserDefaults`, or an App
-Group suite), then drive the UI with baguette. Values keep their type, a key
+Prepare an app's persisted preferences (its standard `UserDefaults`, an App
+Group suite, or a suite of its own), then drive the UI with baguette. Values keep their type, a key
 that was never stored reads differently from a stored `false` / `0` / `""`, and
 nothing outside the key you name changes. Every flag:
 [commands.md#baguette-defaults](../../commands.md#baguette-defaults).
@@ -84,9 +84,11 @@ capability reaches these routes.
   fails, the app stays quit, so a running app never hides the failure.
 - **The simulator must be booted.** Reads and writes go through the guest's own
   `cfprefsd`. A shut-down device fails with "not booted".
-- **The suite name is the App Group identifier**, as in
-  `UserDefaults(suiteName: "group.…")`. A group the app's entitlements don't
-  grant is an error, never a silent fallback to standard defaults.
+- **`--suite group.…` is an App Group; any other suite is the app's own.**
+  `UserDefaults(suiteName: "group.…")` lives in the group's shared container,
+  and a group the app's entitlements don't grant is an error, never a silent
+  fallback to standard defaults. `UserDefaults(suiteName: "com.x.debug")` lives
+  in the app's data container as `com.x.debug.plist`.
 - **Persisted values only.** `register(defaults:)` values live in the app's
   memory and never appear here, and neither do managed preferences, the
   Keychain or app databases.
