@@ -24,6 +24,32 @@ public struct Preferences: Equatable, Sendable {
         self.values = values
     }
 
+    /// What an export file holds — the JSON a read reports (`{"values":
+    /// {…}}`) or just its typed map — read back so it can be imported.
+    /// Throws naming the first key whose value isn't typed, so a
+    /// hand-edited file says where it went wrong.
+    public init(importing data: Data) throws {
+        guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            throw PreferencesImportError.notAnObject
+        }
+        let map = object["values"] as? [String: Any] ?? object
+        var values: [String: PreferenceValue] = [:]
+        for key in map.keys.sorted() {
+            do {
+                values[key] = try PreferenceValue(json: map[key]!)
+            } catch {
+                throw PreferencesImportError.untyped(key: key)
+            }
+        }
+        self.values = values
+    }
+
+    /// Just `keys` — for exporting part of a suite. A key that isn't
+    /// stored is simply not in the result.
+    public func only(_ keys: [String]) -> Preferences {
+        Preferences(values: values.filter { keys.contains($0.key) })
+    }
+
     /// Every stored value, keyed, each in `PreferenceValue.json`'s typed
     /// shape.
     public var json: [String: Any] {
@@ -44,5 +70,19 @@ public struct Preferences: Equatable, Sendable {
     public func json(forKey key: String) -> [String: Any] {
         guard let value = values[key] else { return ["key": key, "present": false] }
         return value.json.merging(["key": key, "present": true]) { _, new in new }
+    }
+}
+
+public enum PreferencesImportError: Error, Equatable, CustomStringConvertible {
+    case notAnObject
+    case untyped(key: String)
+
+    public var description: String {
+        switch self {
+        case .notAnObject:
+            return "an import must be a JSON object: a `defaults export` or a map of typed values"
+        case .untyped(let key):
+            return #"\#(key) is not a {"type": …, "value": …} preference value"#
+        }
     }
 }

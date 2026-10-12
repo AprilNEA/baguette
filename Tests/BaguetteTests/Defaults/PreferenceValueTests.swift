@@ -131,4 +131,37 @@ struct PreferenceValueTests {
         #expect(PreferenceValue(plist: NSNumber(value: 1)) == .integer(1))
         #expect(PreferenceValue(plist: NSNumber(value: 1.0)) == .real(1))
     }
+
+    // MARK: - what an import reads
+
+    @Test func `should read back every value it reported`() throws {
+        let values: [PreferenceValue] = [
+            .bool(false), .integer(-3), .real(0.25), .real(2), .string(""),
+            .date(Date(timeIntervalSince1970: 1_767_323_045)), .data(Data([0, 1, 2])),
+            .array([.integer(1), .string("x")]), .dictionary(["a": .dictionary(["b": .bool(true)])]),
+        ]
+        for value in values {
+            let reported = try JSONSerialization.jsonObject(
+                with: JSONSerialization.data(withJSONObject: value.json)
+            )
+            #expect(try PreferenceValue(json: reported) == value)
+        }
+    }
+
+    @Test func `should keep a whole-number float a real when importing`() throws {
+        #expect(try PreferenceValue(json: ["type": "float", "value": 1]) == .real(1))
+    }
+
+    @Test func `should refuse JSON that is not a typed value`() {
+        for json: Any in [
+            "false", ["value": false], ["type": "double", "value": 1],
+            ["type": "bool", "value": "true"], ["type": "bool", "value": 1],
+            ["type": "int", "value": 1.5], ["type": "int", "value": true],
+            ["type": "float", "value": false], ["type": "string", "value": 1],
+            ["type": "date", "value": "yesterday"], ["type": "data", "value": "%%"],
+            ["type": "array", "value": [1]], ["type": "dict", "value": ["a": 1]],
+        ] {
+            #expect(throws: PreferenceValueError.self) { try PreferenceValue(json: json) }
+        }
+    }
 }

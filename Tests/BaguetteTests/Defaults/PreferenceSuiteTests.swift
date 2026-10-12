@@ -126,4 +126,31 @@ struct PreferencesTests {
         #expect(Preferences(values: [:]).json(in: try PreferenceSuite(bundleID: "com.x")) as NSDictionary
             == ["bundleId": "com.x", "values": [:] as [String: Any]] as NSDictionary)
     }
+
+    @Test func `should keep only the keys asked for`() {
+        let preferences = Preferences(values: ["a": .integer(1), "b": .integer(2)])
+        #expect(preferences.only(["b", "missing"]).values == ["b": .integer(2)])
+    }
+
+    @Test func `should import what an export printed`() throws {
+        let export = Data(#"{"bundleId":"com.x","values":{"seen":{"type":"bool","value":false}}}"#.utf8)
+        #expect(try Preferences(importing: export).values == ["seen": .bool(false)])
+    }
+
+    @Test func `should import a bare map of typed values`() throws {
+        let map = Data(#"{"n":{"type":"float","value":3}}"#.utf8)
+        #expect(try Preferences(importing: map).values == ["n": .real(3)])
+    }
+
+    @Test func `should refuse an import whose value is not typed, naming its key`() {
+        #expect(throws: PreferencesImportError.untyped(key: "seen")) {
+            try Preferences(importing: Data(#"{"values":{"seen":false}}"#.utf8))
+        }
+    }
+
+    @Test func `should refuse an import that is not a JSON object`() {
+        #expect(throws: PreferencesImportError.notAnObject) {
+            try Preferences(importing: Data("[1]".utf8))
+        }
+    }
 }

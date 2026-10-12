@@ -996,3 +996,34 @@ baguette defaults delete --udid <udid> --bundle-id <bundle-id> --key <key> [--su
 | `--suite` |  |  | An App Group suite (the group identifier) instead of the app's standard defaults |
 | `--key` | yes |  | The key to remove |
 | `--relaunch` |  |  | Quit the app before removing and launch it after |
+
+### baguette defaults export
+
+Print the suite's preferences as typed JSON, for `defaults import`
+
+```
+baguette defaults export --udid <udid> --bundle-id <bundle-id> [--suite <suite>] [--key <key> …]
+```
+
+| Flag | Required | Default | Description |
+|---|---|---|---|
+| `--udid` | yes |  | Simulator UDID |
+| `--bundle-id` | yes |  | The app's bundle identifier |
+| `--suite` |  |  | An App Group suite (the group identifier) instead of the app's standard defaults |
+| `--key` |  |  | Export only this key (repeatable) |
+
+### baguette defaults import
+
+Write every value from a `defaults export` file, leaving other keys alone
+
+```
+baguette defaults import --udid <udid> --bundle-id <bundle-id> --file <file> [--suite <suite>] [--relaunch]
+```
+
+| Flag | Required | Default | Description |
+|---|---|---|---|
+| `--udid` | yes |  | Simulator UDID |
+| `--bundle-id` | yes |  | The app's bundle identifier |
+| `--suite` |  |  | An App Group suite (the group identifier) instead of the app's standard defaults |
+| `--file` | yes |  | A `defaults export` file, or a JSON map of typed values; - reads stdin |
+| `--relaunch` |  |  | Quit the app before the import and launch it once after |

@@ -235,7 +235,9 @@ Wired (use freely):
   App Group suite. CLI: `baguette defaults read|write|delete --udid <X>
   --bundle-id <id> [--suite group.…] [--key k]`; `write` takes `--type
   bool|int|float|string|date|data|plist --value …`; `--json` reads
-  `{"type":…,"value":…}` and `present:false` for an absent key. **A
+  `{"type":…,"value":…}` and `present:false` for an absent key;
+  `export [--key k …]` / `import --file f.json` save and restore a
+  set of keys for repeatable setup. **A
   running app may not see a write**: pass `--relaunch` (quit → write →
   launch). HTTP: `GET /simulators/<X>/defaults.json`, `POST|DELETE
   /simulators/<X>/defaults`. See

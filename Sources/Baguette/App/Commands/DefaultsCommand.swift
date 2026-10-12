@@ -12,7 +12,7 @@ struct DefaultsCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "defaults",
         abstract: "Read or edit an app's UserDefaults, typed, including App Group suites",
-        subcommands: [Read.self, Write.self, Delete.self]
+        subcommands: [Read.self, Write.self, Delete.self, Export.self, Import.self]
     )
 
     /// Which simulator, which app, which suite — shared by all three verbs.
@@ -180,6 +180,86 @@ struct DefaultsCommand: ParsableCommand {
                 throw ExitCode.failure
             }
             log(removed ? "Removed \(key)" : "\(key) was not set; nothing removed")
+        }
+    }
+
+    /// `baguette defaults export … [--key <k> …] > prefs.json`
+    struct Export: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "export",
+            abstract: "Print the suite's preferences as typed JSON, for `defaults import`"
+        )
+
+        @OptionGroup var target: Target
+
+        @Option(name: .customLong("key"), help: "Export only this key (repeatable)")
+        var keys: [String] = []
+
+        func export(_ preferences: Preferences, from suite: PreferenceSuite) -> [String: Any] {
+            (keys.isEmpty ? preferences : preferences.only(keys)).json(in: suite)
+        }
+
+        func run() async throws {
+            let object: [String: Any]
+            do {
+                let suite = try target.preferenceSuite()
+                object = export(try await target.simulator().defaults().read(suite), from: suite)
+            } catch let exit as ExitCode {
+                throw exit
+            } catch {
+                log("defaults export failed: \(error)")
+                throw ExitCode.failure
+            }
+            let data = try JSONSerialization.data(
+                withJSONObject: object, options: [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
+            )
+            print(String(decoding: data, as: UTF8.self))
+        }
+    }
+
+    /// `baguette defaults import … --file prefs.json [--relaunch]`
+    struct Import: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "import",
+            abstract: "Write every value from a `defaults export` file, leaving other keys alone"
+        )
+
+        @OptionGroup var target: Target
+
+        @Option(help: "A `defaults export` file, or a JSON map of typed values; - reads stdin")
+        var file: String
+
+        @Flag(help: "Quit the app before the import and launch it once after")
+        var relaunch = false
+
+        /// The file's values, written into the suite named on the command
+        /// line — not the one the export came from, so a set saved from one
+        /// app or simulator can seed another.
+        func preferenceImport(from data: Data) throws -> PreferenceImport {
+            PreferenceImport(
+                suite: try target.preferenceSuite(),
+                preferences: try Preferences(importing: data),
+                relaunch: relaunch
+            )
+        }
+
+        func run() async throws {
+            let written: Int
+            do {
+                let data = file == "-"
+                    ? FileHandle.standardInput.readDataToEndOfFile()
+                    : try Data(contentsOf: URL(fileURLWithPath: file))
+                let restore = try preferenceImport(from: data)
+                let simulator = try target.simulator()
+                written = try await restore.apply(on: simulator.defaults(), apps: simulator.apps())
+            } catch let exit as ExitCode {
+                throw exit
+            } catch {
+                log("defaults import failed: \(error)")
+                throw ExitCode.failure
+            }
+            log("Imported \(written) value\(written == 1 ? "" : "s") into \(target.suite ?? target.bundleID)"
+                + (relaunch ? " and relaunched \(target.bundleID)" : ""))
         }
     }
 }

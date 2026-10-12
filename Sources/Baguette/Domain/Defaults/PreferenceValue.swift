@@ -103,6 +103,39 @@ public indirect enum PreferenceValue: Equatable, Sendable {
         }
     }
 
+    /// A value in the typed shape `json` reports — what an import reads
+    /// back from an export. The type tag decides, so `{"type":"float",
+    /// "value":1}` is a real even though JSON spells it like an int; a
+    /// value whose JSON doesn't fit its tag (`{"type":"bool","value":1}`)
+    /// is refused rather than coerced.
+    public init(json: Any) throws {
+        guard let object = json as? [String: Any],
+              let type = object["type"] as? String,
+              let raw = object["value"]
+        else { throw PreferenceValueError.notTyped }
+        let isBool = (raw as? NSNumber).map { CFGetTypeID($0) == CFBooleanGetTypeID() } ?? false
+        switch (type, raw) {
+        case ("bool", let flag as NSNumber) where isBool:
+            self = .bool(flag.boolValue)
+        case ("int", let n as NSNumber) where !isBool && !CFNumberIsFloatType(n):
+            self = .integer(n.intValue)
+        case ("float", let x as NSNumber) where !isBool:
+            self = .real(x.doubleValue)
+        case ("string", let text as String):
+            self = .string(text)
+        case ("date", let text as String):
+            self = try PreferenceValue.parse(type: .date, value: text)
+        case ("data", let text as String):
+            self = try PreferenceValue.parse(type: .data, value: text)
+        case ("array", let elements as [Any]):
+            self = .array(try elements.map(PreferenceValue.init(json:)))
+        case ("dict", let entries as [String: Any]):
+            self = .dictionary(try entries.mapValues(PreferenceValue.init(json:)))
+        default:
+            throw PreferenceValueError.notTyped
+        }
+    }
+
     // MARK: - out
 
     /// The plist element `defaults write` stores with its type intact.
@@ -201,11 +234,15 @@ public enum PreferenceType: CaseIterable, Equatable, Sendable {
 public enum PreferenceValueError: Error, Equatable, CustomStringConvertible {
     /// The typed text isn't a value of the named type.
     case notA(PreferenceType, String)
+    /// JSON that isn't `{"type": …, "value": …}` with a value of that type.
+    case notTyped
 
     public var description: String {
         switch self {
         case .notA(let type, let value):
             return "\"\(value)\" is not a valid \(type.wireName)"
+        case .notTyped:
+            return #"not a {"type": …, "value": …} preference value"#
         }
     }
 }

@@ -178,4 +178,27 @@ struct DefaultsRoutesTests {
             udid: "U", query: ["bundleId": "com.x", "key": "k", "relaunch": "true"], simulators: simulators
         ) == .failed("xcrun simctl terminate exited 9"))
     }
+
+    // MARK: - import
+
+    @Test func `should import a saved set of values from a JSON body, relaunching once`() async {
+        let (simulators, journal) = host()
+        let outcome = await Server.writeDefaults(
+            udid: "U",
+            body: #"{"bundleId":"com.x","relaunch":true,"values":{"b":{"type":"int","value":2},"a":{"type":"bool","value":true}}}"#,
+            simulators: simulators
+        )
+        #expect(outcome == .ok(#"{"ok":true,"written":2}"#))
+        #expect(journal.steps == [
+            "terminate com.x", "write com.x a=<true/>", "write com.x b=<integer>2</integer>", "launch com.x",
+        ])
+    }
+
+    @Test func `should refuse an import with an untyped value, naming its key`() async {
+        let (simulators, journal) = host()
+        #expect(await Server.writeDefaults(
+            udid: "U", body: #"{"bundleId":"com.x","values":{"seen":false}}"#, simulators: simulators
+        ) == .badRequest(PreferencesImportError.untyped(key: "seen").description))
+        #expect(journal.steps.isEmpty)
+    }
 }

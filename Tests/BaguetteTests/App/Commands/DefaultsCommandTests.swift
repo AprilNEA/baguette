@@ -12,7 +12,7 @@ struct DefaultsCommandTests {
     @Test func `should offer read, write and delete under defaults`() {
         #expect(DefaultsCommand.configuration.commandName == "defaults")
         #expect(DefaultsCommand.configuration.subcommands.map { $0.configuration.commandName }
-            == ["read", "write", "delete"])
+            == ["read", "write", "delete", "export", "import"])
     }
 
     @Test func `should read the app's standard defaults when no suite is given`() throws {
@@ -92,5 +92,39 @@ struct DefaultsCommandTests {
         #expect(DefaultsCommand.Read.text(Preferences(values: [:]), key: "seen") == "seen is not set")
         #expect(DefaultsCommand.Read.text(Preferences(values: ["seen": .integer(0)]), key: "seen")
             == "seen = 0 (int)")
+    }
+
+    @Test func `should export every stored preference when no keys are named`() throws {
+        let cmd = try DefaultsCommand.Export.parse(["--udid", "U", "--bundle-id", "com.x"])
+        let json = cmd.export(Preferences(values: ["a": .integer(1), "b": .bool(true)]), from: try cmd.target.preferenceSuite())
+        #expect(json as NSDictionary == [
+            "bundleId": "com.x",
+            "values": ["a": ["type": "int", "value": 1], "b": ["type": "bool", "value": true]],
+        ] as NSDictionary)
+    }
+
+    @Test func `should export only the keys named`() throws {
+        let cmd = try DefaultsCommand.Export.parse([
+            "--udid", "U", "--bundle-id", "com.x", "--suite", "group.x", "--key", "b", "--key", "c",
+        ])
+        let json = cmd.export(Preferences(values: ["a": .integer(1), "b": .bool(true)]), from: try cmd.target.preferenceSuite())
+        #expect(json as NSDictionary == [
+            "bundleId": "com.x", "suite": "group.x",
+            "values": ["b": ["type": "bool", "value": true]],
+        ] as NSDictionary)
+    }
+
+    @Test func `should import an export into the suite named on the command line`() throws {
+        let cmd = try DefaultsCommand.Import.parse([
+            "--udid", "U", "--bundle-id", "com.y", "--file", "prefs.json", "--relaunch",
+        ])
+        let restore = try cmd.preferenceImport(
+            from: Data(#"{"bundleId":"com.x","values":{"seen":{"type":"bool","value":false}}}"#.utf8)
+        )
+        #expect(restore == PreferenceImport(
+            suite: try PreferenceSuite(bundleID: "com.y"),
+            preferences: Preferences(values: ["seen": .bool(false)]),
+            relaunch: true
+        ))
     }
 }

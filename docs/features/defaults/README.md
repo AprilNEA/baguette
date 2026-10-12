@@ -35,6 +35,18 @@ the last one (or all of them). The app quits before the write and launches
 after, so it starts from what you stored. Then `describe-ui` / `screenshot` as
 usual.
 
+**Save a setup once, restore it every run.** `export` prints the suite as
+typed JSON (all keys, or the `--key`s you name); `import` writes those values
+back, into whichever app and suite you name, and leaves other keys alone. With
+`--relaunch` the app is quit once before the import and launched once after.
+
+```bash
+baguette defaults export --udid <UDID> --bundle-id com.example.app \
+  --key onboardingComplete --key featureFlags > onboarding.json
+baguette defaults import --udid <UDID> --bundle-id com.example.app \
+  --file onboarding.json --relaunch            # --file - reads stdin
+```
+
 **Check a key, not just a value.** `read --key k --json` answers
 `{"key":"k","present":false}` for a key that was never stored and
 `{"key":"k","present":true,"type":"bool","value":false}` for a stored `false`.
@@ -64,6 +76,9 @@ GET    /simulators/<UDID>/defaults.json?bundleId=com.x[&suite=group.x][&key=k]
 POST   /simulators/<UDID>/defaults
        {"bundleId":"com.x","suite":"group.x"?,"key":"seen","type":"bool","value":false,"relaunch":true?}
        → {"ok":true}
+POST   /simulators/<UDID>/defaults
+       {"bundleId":"com.x","values":{…an export's values…},"relaunch":true?}
+       → {"ok":true,"written":3}
 DELETE /simulators/<UDID>/defaults?bundleId=com.x[&suite=group.x]&key=seen[&relaunch=1]
        → {"ok":true,"removed":true}
 ```

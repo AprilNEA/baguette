@@ -11,6 +11,7 @@ extension Server {
 
     /// `GET    /simulators/:udid/defaults.json?bundleId=…[&suite=…][&key=…]`
     /// `POST   /simulators/:udid/defaults`   `{"bundleId","suite"?,"key","type","value","relaunch"?}`
+    ///                                       or `{"bundleId","suite"?,"values":{…},"relaunch"?}` to import
     /// `DELETE /simulators/:udid/defaults?bundleId=…[&suite=…]&key=…[&relaunch=1]`
     ///
     /// All three ride the browser-trust check and none is plugin-reachable:
@@ -109,6 +110,9 @@ extension Server {
         guard let object = try? JSONSerialization.jsonObject(with: Data(body.utf8)),
               let fields = object as? [String: Any]
         else { return .badRequest("defaults body must be a JSON object") }
+        if let values = fields["values"] {
+            return await importDefaults(fields: fields, values: values, udid: udid, simulators: simulators)
+        }
         guard let key = fields["key"] as? String, !key.isEmpty else {
             return .badRequest("key is required")
         }
@@ -133,6 +137,33 @@ extension Server {
             return .badRequest("\(error)")
         }
         return await apply(edit, udid: udid, simulators: simulators) { _ in #"{"ok":true}"# }
+    }
+
+    /// A body carrying `values` (a `defaults export`'s map) writes them all,
+    /// relaunching once around the batch when asked.
+    private static func importDefaults(
+        fields: [String: Any], values: Any, udid: String, simulators: any Simulators
+    ) async -> DefaultsOutcome {
+        let restore: PreferenceImport
+        do {
+            let map = try JSONSerialization.data(withJSONObject: ["values": values])
+            restore = PreferenceImport(
+                suite: try PreferenceSuite(
+                    bundleID: fields["bundleId"] as? String ?? "", name: fields["suite"] as? String
+                ),
+                preferences: try Preferences(importing: map),
+                relaunch: fields["relaunch"] as? Bool ?? false
+            )
+        } catch {
+            return .badRequest("\(error)")
+        }
+        guard !udid.isEmpty, let sim = simulators.find(udid: udid) else { return .unknownDevice }
+        do {
+            let written = try await restore.apply(on: sim.defaults(), apps: sim.apps())
+            return .ok(#"{"ok":true,"written":\#(written)}"#)
+        } catch {
+            return outcome(for: error)
+        }
     }
 
     /// Remove one key; `removed` says whether it was stored.
