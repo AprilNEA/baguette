@@ -10,6 +10,9 @@ For releases prior to this changelog, see the
 
 ## [Unreleased]
 
+### Added
+- `serve`'s ⛶ Handheld button (or `?handheld=1`) gives a phone the whole live screen — no bezel or toolbar, screen kept awake, a floating button for Home / Rotate / Exit; fullscreen on Android, via Add to Home Screen on iPhone. → [docs](docs/features/handheld/README.md) ([#114](https://github.com/tddworks/baguette/pull/114))
+
 ---
 
 ## [0.2.4] - 2026-10-07
