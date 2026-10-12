@@ -2621,6 +2621,149 @@
     color: #facc15; font: 700 10px -apple-system, sans-serif; letter-spacing: .14em;
   }
   body.preview #simNativeView .preview-banner { display: block; }
+
+  /* --- Handheld ------------------------------------------------------
+     The stream held in the hand. `[data-handheld]` on the root turns
+     the workbench off: everything but the device column and the
+     handheld controls leaves, and #nativeDeviceFrame becomes a black
+     stage over the whole view with the live screen contain-fit in it.
+
+     The bezel image and its hardware-button overlays go — the phone
+     in the hand IS the bezel. The screen's rounded clip goes too: the
+     glass it is shown on already has corners of its own.
+
+     The screen box is sized in JS (`--nv-hh-w` / `--nv-hh-h`, from
+     HandheldMode.fit) rather than here, because it has to fit the
+     ROTATED footprint in landscape, and the rotation degree lives in
+     an inline transform set by `applyOrientation`. Each `!important`
+     below beats an inline style the SDK Bezel writes, or the
+     `--nv-device-max-*` caps above, which are `!important` already. */
+  #simNativeView[data-handheld] > :not(.dual-pane):not(.handheld-ui):not(.handheld-hint),
+  #simNativeView[data-handheld] .dual-pane > :not(.device-column),
+  #simNativeView[data-handheld] .device-column > :not(#nativeDeviceFrame) {
+    display: none !important;
+  }
+  #simNativeView[data-handheld] #nativeDeviceFrame {
+    position: fixed; inset: 0;
+    z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+    background: #000;
+    overflow: hidden;
+    /* The workbench's `--nv-device-max-*` caps are on this element
+       too; the stage is the whole view, not the device's share of it. */
+    max-width: none !important;
+    max-height: none !important;
+    /* The page is a screen, not a document: no pull-to-refresh, no
+       rubber-banding, no double-tap zoom stealing a tap. */
+    touch-action: none;
+    overscroll-behavior: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+  }
+  #simNativeView[data-handheld] #nativeDeviceFrame > div {
+    width: var(--nv-hh-w, 100vw) !important;
+    height: var(--nv-hh-h, 100vh) !important;
+    max-width: none !important;
+    max-height: none !important;
+    flex: 0 0 auto;
+  }
+  #simNativeView[data-handheld] #nativeDeviceFrame > div > img,
+  #simNativeView[data-handheld] #nativeDeviceFrame > div > button[data-btn] {
+    display: none !important;
+  }
+  #simNativeView[data-handheld] #nativeDeviceFrame > div > div:first-child {
+    left: 0 !important; top: 0 !important;
+    width: 100% !important; height: 100% !important;
+    border-radius: 0 !important;
+    cursor: default !important;
+  }
+  #simNativeView[data-handheld] #nativeDeviceFrame canvas {
+    max-width: none !important;
+    max-height: none !important;
+  }
+
+  /* The way back. Hidden off the stage; over the simulated Dynamic
+     Island on it, below whatever the real phone's status bar takes
+     (`safe-area-inset-top`, non-zero only from a Home Screen launch
+     with `viewport-fit=cover`). Faint until touched, so it reads as
+     part of the glass rather than a control laid over it. */
+  #simNativeView .handheld-ui { display: none; }
+  #simNativeView[data-handheld] .handheld-ui {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 4px);
+    left: 50%; transform: translateX(-50%);
+    z-index: 101;
+  }
+  #simNativeView .handheld-ui .hh-grip {
+    display: grid; place-items: center;
+    width: 64px; height: 26px;
+    padding: 0; border: 0; background: transparent;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #simNativeView .handheld-ui .hh-grip > span {
+    display: block; width: 38px; height: 5px; border-radius: 3px;
+    background: rgba(255, 255, 255, 0.32);
+    box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.35);
+    transition: background 0.15s ease;
+  }
+  #simNativeView .handheld-ui[data-open="true"] .hh-grip > span {
+    background: rgba(255, 255, 255, 0.75);
+  }
+  #simNativeView .handheld-ui .hh-menu {
+    display: flex; gap: 4px;
+    padding: 5px;
+    border-radius: 999px;
+    background: rgba(20, 20, 24, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(18px) saturate(1.5);
+    -webkit-backdrop-filter: blur(18px) saturate(1.5);
+    opacity: 0; transform: translateY(-6px) scale(0.96);
+    pointer-events: none;
+    transition: opacity 0.16s ease, transform 0.16s ease;
+  }
+  #simNativeView .handheld-ui[data-open="true"] .hh-menu {
+    opacity: 1; transform: none; pointer-events: auto;
+  }
+  #simNativeView .handheld-ui .hh-btn {
+    display: grid; place-items: center;
+    width: 44px; height: 44px;   /* a finger, not a cursor */
+    padding: 0; border: 0; border-radius: 999px;
+    background: transparent; color: #f5f5f7;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #simNativeView .handheld-ui .hh-btn:active { background: rgba(255, 255, 255, 0.18); }
+
+  #simNativeView .handheld-hint { display: none; }
+  #simNativeView[data-handheld] .handheld-hint:not([hidden]) {
+    display: flex; align-items: center; gap: 10px;
+    position: fixed; z-index: 101;
+    left: 50%; transform: translateX(-50%);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+    width: max-content; max-width: calc(100vw - 32px);
+    box-sizing: border-box;
+    padding: 9px 8px 9px 14px;
+    border-radius: 14px;
+    background: rgba(20, 20, 24, 0.86);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(18px) saturate(1.5);
+    -webkit-backdrop-filter: blur(18px) saturate(1.5);
+    color: #f5f5f7;
+    font: 500 13px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  }
+  #simNativeView .handheld-hint b { font-weight: 650; }
+  #simNativeView .handheld-hint button {
+    flex: 0 0 auto;
+    width: 30px; height: 30px; padding: 0;
+    border: 0; border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1); color: #f5f5f7;
+    font: 600 12px/1 -apple-system, sans-serif;
+    cursor: pointer;
+  }
 </style>
 
 <div id="simNativeView">
@@ -2690,6 +2833,24 @@
              stroke-width="1.6" stroke-linejoin="round" width="17" height="17">
           <path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/>
           <path d="m4 7.5 8 4.5 8-4.5M12 12v9"/>
+        </svg>
+      </button>
+
+      <!-- Handheld — the stream held in the hand. Drops the bezel,
+           toolbar and rails and gives the live screen the whole view,
+           the way the phone it is shown on would look. Built for
+           opening this page on a phone; see handheld/handheld-mode.js. -->
+      <button class="ico-btn" id="nativeHandheldToggle"
+              title="Handheld — fill this screen with the simulator"
+              aria-label="Enter handheld mode"
+              onclick="window.__nativeEnterHandheld && window.__nativeEnterHandheld()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+             stroke-linecap="round" stroke-linejoin="round" width="17" height="17">
+          <!-- four corners pulled outward: "fill the screen" -->
+          <path d="M4 9V5a1 1 0 0 1 1-1h4"/>
+          <path d="M15 4h4a1 1 0 0 1 1 1v4"/>
+          <path d="M20 15v4a1 1 0 0 1-1 1h-4"/>
+          <path d="M9 20H5a1 1 0 0 1-1-1v-4"/>
         </svg>
       </button>
 
@@ -2941,6 +3102,64 @@
        container — a transformed ancestor would become the containing
        block for the `position: fixed` plugin panel and flyout inside it,
        which is why it centres with `justify-content` instead. -->
+  <!-- Handheld controls. In handheld mode nothing but the screen is
+       on the glass, so the way back has to be small and out of the
+       way: a grabber over the simulated Dynamic Island (a strip the
+       guest draws nothing tappable on) that opens a pill of the few
+       things a hand can't do on the screen itself. The pill closes on
+       its own. Shown only while `[data-handheld]` is on the root. -->
+  <div class="handheld-ui" id="nativeHandheldUI" data-open="false">
+    <button class="hh-grip" type="button" aria-label="Show handheld controls"
+            aria-expanded="false"
+            onclick="window.__nativeHandheldMenu && window.__nativeHandheldMenu()"><span></span></button>
+    <div class="hh-menu" role="toolbar" aria-label="Handheld controls">
+      <button class="hh-btn" type="button" title="Home" aria-label="Home"
+              onclick="window.__nativeHandheldAction && window.__nativeHandheldAction('home')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+             stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+          <path d="M3 11.2 12 4l9 7.2"/>
+          <path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/>
+        </svg>
+      </button>
+      <button class="hh-btn" type="button" title="App switcher" aria-label="Open app switcher"
+              onclick="window.__nativeHandheldAction && window.__nativeHandheldAction('app-switcher')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+             stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+          <rect x="3" y="6" width="8" height="12" rx="1.6"/>
+          <rect x="13" y="6" width="8" height="12" rx="1.6"/>
+        </svg>
+      </button>
+      <button class="hh-btn" type="button" title="Rotate" aria-label="Rotate device"
+              onclick="window.__nativeHandheldAction && window.__nativeHandheldAction('rotate')">
+        <!-- A plain clockwise arrow: at pill size the toolbar's phone-
+             over-arc glyph reads as a microphone. -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+             stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+          <path d="M20 12a8 8 0 1 1-2.34-5.66"/>
+          <polyline points="20 4 20 9 15 9"/>
+        </svg>
+      </button>
+      <button class="hh-btn" type="button" title="Leave handheld" aria-label="Leave handheld mode"
+              onclick="window.__nativeHandheldAction && window.__nativeHandheldAction('exit')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+             stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+          <!-- four corners pulled inward: "back to the window" -->
+          <path d="M9 4v4a1 1 0 0 1-1 1H4"/>
+          <path d="M20 9h-4a1 1 0 0 1-1-1V4"/>
+          <path d="M15 20v-4a1 1 0 0 1 1-1h4"/>
+          <path d="M4 15h4a1 1 0 0 1 1 1v4"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+  <!-- Said once, on an iPhone in a browser tab: the bars around the
+       screen can only go by launching from a Home Screen icon. -->
+  <div class="handheld-hint" id="nativeHandheldHint" role="status" hidden>
+    <span>For full screen, tap <b>Share</b> → <b>Add to Home Screen</b>.</span>
+    <button type="button" aria-label="Dismiss"
+            onclick="window.__nativeHandheldHintClose && window.__nativeHandheldHintClose()">✕</button>
+  </div>
+
   <div class="right-rails" id="nativeRightRails"></div>
 
   <!-- Accessibility-inspector host. sim-native.js mounts an

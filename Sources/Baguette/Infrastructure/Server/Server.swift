@@ -967,6 +967,7 @@ struct Server: Sendable {
         "carplay-frames/plain",
         "sim-list",
         "farm",
+        "handheld",
         "network",
         "screens",
         "toolbar",
