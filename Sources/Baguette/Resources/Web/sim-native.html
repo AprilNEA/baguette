@@ -69,6 +69,17 @@
     overflow: hidden;
     -webkit-user-select: none; user-select: none;
   }
+  /* A Home Screen launch: the iPhone's status bar is translucent over
+     the top of the page and the home indicator over the bottom, so the
+     workbench keeps its 12px inside the safe area rather than under
+     them. sim-native.js sets the attribute and `viewport-fit=cover`,
+     without which every inset reads 0. */
+  #simNativeView[data-standalone] {
+    padding: calc(env(safe-area-inset-top, 0px) + 12px)
+             calc(env(safe-area-inset-right, 0px) + 12px)
+             calc(env(safe-area-inset-bottom, 0px) + 12px)
+             calc(env(safe-area-inset-left, 0px) + 12px);
+  }
   /* Light + dark token blocks. Defined as both a media query (for
      "follow system" mode) and a `data-theme` attribute selector
      (for the manual toggle). The attribute selector has higher
@@ -2682,60 +2693,90 @@
     max-height: none !important;
   }
 
-  /* The way back. Hidden off the stage; over the simulated Dynamic
-     Island on it, below whatever the real phone's status bar takes
-     (`safe-area-inset-top`, non-zero only from a Home Screen launch
-     with `viewport-fit=cover`). Faint until touched, so it reads as
-     part of the glass rather than a control laid over it. */
+  /* The way to the controls: one floating button over the stage
+     (`left` / `top` set inline from HandheldButton.place), faded while
+     idle so it reads as part of the glass rather than a control laid
+     over it. `.handheld-ui` spans the view only to carry the phone's
+     safe area as padding, which sim-native.js reads back for the
+     button's travel; it lets every touch through except on its
+     children. */
   #simNativeView .handheld-ui { display: none; }
   #simNativeView[data-handheld] .handheld-ui {
-    display: flex; flex-direction: column; align-items: center; gap: 6px;
-    position: fixed;
-    top: calc(env(safe-area-inset-top, 0px) + 4px);
-    left: 50%; transform: translateX(-50%);
+    display: block;
+    position: fixed; inset: 0;
     z-index: 101;
-  }
-  #simNativeView .handheld-ui .hh-grip {
-    display: grid; place-items: center;
-    width: 64px; height: 26px;
-    padding: 0; border: 0; background: transparent;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-  }
-  #simNativeView .handheld-ui .hh-grip > span {
-    display: block; width: 38px; height: 5px; border-radius: 3px;
-    background: rgba(255, 255, 255, 0.32);
-    box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.35);
-    transition: background 0.15s ease;
-  }
-  #simNativeView .handheld-ui[data-open="true"] .hh-grip > span {
-    background: rgba(255, 255, 255, 0.75);
-  }
-  #simNativeView .handheld-ui .hh-menu {
-    display: flex; gap: 4px;
-    padding: 5px;
-    border-radius: 999px;
-    background: rgba(20, 20, 24, 0.82);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(18px) saturate(1.5);
-    -webkit-backdrop-filter: blur(18px) saturate(1.5);
-    opacity: 0; transform: translateY(-6px) scale(0.96);
     pointer-events: none;
-    transition: opacity 0.16s ease, transform 0.16s ease;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+             env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+  #simNativeView .handheld-ui .hh-fab {
+    position: absolute; left: 0; top: 0;
+    width: 56px; height: 56px;
+    padding: 0;
+    display: grid; place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 16px;
+    background: rgba(28, 28, 32, 0.72);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(16px) saturate(1.4);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    pointer-events: auto;
+    cursor: pointer;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none; user-select: none;
+    opacity: 1;
+    transition: opacity 0.4s ease, left 0.22s cubic-bezier(0.32, 0.72, 0, 1),
+                top 0.22s cubic-bezier(0.32, 0.72, 0, 1), transform 0.12s ease;
+  }
+  /* AssistiveTouch's mark: rings around a white disc. */
+  #simNativeView .handheld-ui .hh-fab > span {
+    display: block; width: 30px; height: 30px; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.22),
+                0 0 0 10px rgba(255, 255, 255, 0.10);
+  }
+  #simNativeView .handheld-ui .hh-fab[data-idle] { opacity: 0.4; }
+  #simNativeView .handheld-ui .hh-fab[data-dragging] { transition: none; transform: scale(1.06); }
+  #simNativeView .handheld-ui .hh-fab:active { transform: scale(0.94); }
+  #simNativeView .handheld-ui[data-open="true"] .hh-fab { opacity: 0; pointer-events: none; }
+
+  #simNativeView .handheld-ui .hh-scrim {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.32);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.18s ease;
+  }
+  #simNativeView .handheld-ui[data-open="true"] .hh-scrim { opacity: 1; pointer-events: auto; }
+
+  #simNativeView .handheld-ui .hh-menu {
+    position: fixed; left: 50%; top: 50%;
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;
+    padding: 12px;
+    border-radius: 30px;
+    background: rgba(24, 24, 28, 0.86);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(22px) saturate(1.5);
+    -webkit-backdrop-filter: blur(22px) saturate(1.5);
+    opacity: 0; transform: translate(-50%, -50%) scale(0.86);
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.2s cubic-bezier(0.32, 0.72, 0, 1);
   }
   #simNativeView .handheld-ui[data-open="true"] .hh-menu {
-    opacity: 1; transform: none; pointer-events: auto;
+    opacity: 1; transform: translate(-50%, -50%); pointer-events: auto;
   }
-  #simNativeView .handheld-ui .hh-btn {
-    display: grid; place-items: center;
-    width: 44px; height: 44px;   /* a finger, not a cursor */
-    padding: 0; border: 0; border-radius: 999px;
+  #simNativeView .handheld-ui .hh-item {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 8px;
+    width: 104px; height: 96px;   /* a thumb, not a cursor */
+    padding: 0; border: 0; border-radius: 20px;
     background: transparent; color: #f5f5f7;
+    font: 500 12px/1.2 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
-  #simNativeView .handheld-ui .hh-btn:active { background: rgba(255, 255, 255, 0.18); }
+  #simNativeView .handheld-ui .hh-item:active { background: rgba(255, 255, 255, 0.14); }
 
   #simNativeView .handheld-hint { display: none; }
   #simNativeView[data-handheld] .handheld-hint:not([hidden]) {
@@ -3103,52 +3144,59 @@
        block for the `position: fixed` plugin panel and flyout inside it,
        which is why it centres with `justify-content` instead. -->
   <!-- Handheld controls. In handheld mode nothing but the screen is
-       on the glass, so the way back has to be small and out of the
-       way: a grabber over the simulated Dynamic Island (a strip the
-       guest draws nothing tappable on) that opens a pill of the few
-       things a hand can't do on the screen itself. The pill closes on
-       its own. Shown only while `[data-handheld]` is on the root. -->
+       on the glass, so its controls hang off one floating button — the
+       AssistiveTouch idiom an iPhone user already knows. It rests
+       faded against a side edge; drag it anywhere and it settles on the
+       nearer side (HandheldButton, handheld/handheld-button.js). A tap
+       opens the menu over a scrim, so a tap aimed at the menu never
+       lands on the simulator. Shown only while `[data-handheld]` is on
+       the root; sim-native.js places it and wires the drag. -->
   <div class="handheld-ui" id="nativeHandheldUI" data-open="false">
-    <button class="hh-grip" type="button" aria-label="Show handheld controls"
-            aria-expanded="false"
-            onclick="window.__nativeHandheldMenu && window.__nativeHandheldMenu()"><span></span></button>
-    <div class="hh-menu" role="toolbar" aria-label="Handheld controls">
-      <button class="hh-btn" type="button" title="Home" aria-label="Home"
+    <div class="hh-scrim"
+         onclick="window.__nativeHandheldMenu && window.__nativeHandheldMenu(false)"></div>
+    <button class="hh-fab" id="nativeHandheldFab" type="button"
+            aria-label="Handheld controls" aria-haspopup="menu" aria-expanded="false"><span></span></button>
+    <div class="hh-menu" role="menu" aria-label="Handheld controls">
+      <button class="hh-item" type="button" role="menuitem"
               onclick="window.__nativeHandheldAction && window.__nativeHandheldAction('home')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
-             stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+             stroke-linecap="round" stroke-linejoin="round" width="26" height="26">
           <path d="M3 11.2 12 4l9 7.2"/>
           <path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/>
         </svg>
+        <span>Home</span>
       </button>
-      <button class="hh-btn" type="button" title="App switcher" aria-label="Open app switcher"
+      <button class="hh-item" type="button" role="menuitem"
               onclick="window.__nativeHandheldAction && window.__nativeHandheldAction('app-switcher')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
-             stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+             stroke-linecap="round" stroke-linejoin="round" width="26" height="26">
           <rect x="3" y="6" width="8" height="12" rx="1.6"/>
           <rect x="13" y="6" width="8" height="12" rx="1.6"/>
         </svg>
+        <span>App Switcher</span>
       </button>
-      <button class="hh-btn" type="button" title="Rotate" aria-label="Rotate device"
+      <button class="hh-item" type="button" role="menuitem"
               onclick="window.__nativeHandheldAction && window.__nativeHandheldAction('rotate')">
-        <!-- A plain clockwise arrow: at pill size the toolbar's phone-
-             over-arc glyph reads as a microphone. -->
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
-             stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+        <!-- A plain clockwise arrow: at this size the toolbar's
+             phone-over-arc glyph reads as a microphone. -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+             stroke-linecap="round" stroke-linejoin="round" width="26" height="26">
           <path d="M20 12a8 8 0 1 1-2.34-5.66"/>
           <polyline points="20 4 20 9 15 9"/>
         </svg>
+        <span>Rotate</span>
       </button>
-      <button class="hh-btn" type="button" title="Leave handheld" aria-label="Leave handheld mode"
+      <button class="hh-item" type="button" role="menuitem"
               onclick="window.__nativeHandheldAction && window.__nativeHandheldAction('exit')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
-             stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
-          <!-- four corners pulled inward: "back to the window" -->
+        <!-- four corners pulled inward: "back to the window" -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+             stroke-linecap="round" stroke-linejoin="round" width="26" height="26">
           <path d="M9 4v4a1 1 0 0 1-1 1H4"/>
           <path d="M20 9h-4a1 1 0 0 1-1-1V4"/>
           <path d="M15 20v-4a1 1 0 0 1 1-1h4"/>
           <path d="M4 15h4a1 1 0 0 1 1 1v4"/>
         </svg>
+        <span>Exit Handheld</span>
       </button>
     </div>
   </div>

@@ -11,7 +11,7 @@ For releases prior to this changelog, see the
 ## [Unreleased]
 
 ### Added
-- The ⛶ Handheld button in the `serve` toolbar (or `?handheld=1`) gives the live screen the whole view on a phone — no bezel, no toolbar, screen kept awake; browser fullscreen on Android, and a Home Screen icon opens straight into it on iPhone. → [docs](docs/features/handheld/README.md)
+- `serve`'s ⛶ Handheld button (or `?handheld=1`) gives a phone the whole live screen — no bezel or toolbar, screen kept awake, a floating button for Home / Rotate / Exit; fullscreen on Android, via Add to Home Screen on iPhone. → [docs](docs/features/handheld/README.md) ([#114](https://github.com/tddworks/baguette/pull/114))
 
 ---
 

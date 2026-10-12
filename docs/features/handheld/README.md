@@ -38,9 +38,18 @@ The phone's screen stays on for as long as handheld mode is showing.
 
 ## Controls
 
-There is no toolbar on the glass, only a faint grabber over the simulator's
-Dynamic Island. Tap it for a pill with **Home**, **App switcher**, **Rotate**
-and **Leave handheld**; the pill closes itself after a few seconds.
+Nothing sits on the glass but one floating button, the AssistiveTouch kind:
+a small glass square resting against a side edge, faded until touched.
+
+- **Tap it** for a menu in the middle of the screen: **Home**, **App
+  Switcher**, **Rotate** and **Exit Handheld**. Tap outside the menu to close
+  it; the simulator never sees taps aimed at the menu.
+- **Drag it** anywhere it is in the way. Let go and it settles against the
+  nearer side edge, and it stays there the next time handheld mode opens,
+  Home Screen launches included.
+
+Exiting inside a Home Screen launch brings the full toolbar back in the same
+window, laid out below the iPhone's status bar.
 
 ## Gotchas
 

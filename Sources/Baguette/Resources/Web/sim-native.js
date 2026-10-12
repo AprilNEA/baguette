@@ -67,7 +67,8 @@
   let bootPollTimer = null;  // /simulators.json poll while a boot is in flight
   let firstFrameTimer = null; // fallback so the card can't outlive a live stream
   let handheld = false;       // the stream held in the hand — see enterHandheld
-  let handheldMenuTimer = null; // closes the handheld pill on its own
+  let handheldIdleTimer = null; // fades the floating button when left alone
+  let handheldButtonWired = false;
   let wakeLock = null;        // keeps a phone's screen on while it is the simulator
   let handheldViewport = null; // the viewport <meta> content handheld replaced
   let handheldBackground = null; // the <body> background handheld replaced
@@ -424,6 +425,14 @@
       const handheldBtn = document.getElementById('nativeHandheldToggle');
       if (handheldBtn) handheldBtn.hidden = true;
     }
+    // A Home Screen launch has a translucent status bar over the top of
+    // the page (sim.html's meta) whatever mode it is in, so the view
+    // always covers the whole glass and pads itself by the safe area
+    // (`[data-standalone]` in sim-native.html) — the workbench too.
+    if (launchedStandalone()) {
+      document.getElementById('simNativeView').setAttribute('data-standalone', '');
+      coverViewport(true);
+    }
     // Open in the hand when the address asks for it, or when the page
     // was launched from a Home Screen icon. No user gesture here, so no
     // browser fullscreen — a Home Screen launch has no bars to hide.
@@ -517,7 +526,9 @@
     view.setAttribute('data-handheld', '');
     history.replaceState(history.state, '', mode.href(location.href, true));
     coverViewport(true);
+    wireHandheldButton();
     layoutHandheld();
+    wakeHandheldButton();
     window.addEventListener('resize', layoutHandheld);
     if (window.visualViewport) window.visualViewport.addEventListener('resize', layoutHandheld);
     darkenBrowser(true);
@@ -548,7 +559,7 @@
     view.style.removeProperty('--nv-hh-h');
     setHandheldMenu(false);
     if (mode) history.replaceState(history.state, '', mode.href(location.href, false));
-    coverViewport(false);
+    if (!launchedStandalone()) coverViewport(false);
     darkenBrowser(false);
     hideHomeScreenHint();
     window.removeEventListener('resize', layoutHandheld);
@@ -580,6 +591,7 @@
     });
     view.style.setProperty('--nv-hh-w', box.width + 'px');
     view.style.setProperty('--nv-hh-h', box.height + 'px');
+    placeHandheldButton();
   }
 
   /**
@@ -670,16 +682,122 @@
 
   document.addEventListener('visibilitychange', () => { void holdScreenAwake(); });
 
-  /** Open (or close) the pill under the grabber; it closes itself. */
+  // --- The floating button --------------------------------------------
+  // HandheldButton (handheld/handheld-button.js) decides where it rests;
+  // this drags and paints it. The spot is kept per browser, so a Home
+  // Screen icon opens with the button where it was left.
+
+  const HANDHELD_BUTTON_KEY = 'baguette.handheld.button';
+  const HANDHELD_BUTTON_SIZE = 56;
+  const HANDHELD_BUTTON_MARGIN = 6;
+
+  function handheldButtonGeometry() {
+    const ui = document.getElementById('nativeHandheldUI');
+    const pad = ui ? getComputedStyle(ui) : null;
+    const px = (v) => parseFloat(v) || 0;
+    return {
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      size: HANDHELD_BUTTON_SIZE,
+      margin: HANDHELD_BUTTON_MARGIN,
+      // The phone's status bar and home indicator, as the safe area
+      // `.handheld-ui` carries in its padding.
+      insets: pad
+        ? { top: px(pad.paddingTop), right: px(pad.paddingRight),
+            bottom: px(pad.paddingBottom), left: px(pad.paddingLeft) }
+        : { top: 0, right: 0, bottom: 0, left: 0 },
+    };
+  }
+
+  function storedHandheldSpot() {
+    try {
+      const spot = JSON.parse(localStorage.getItem(HANDHELD_BUTTON_KEY) || 'null');
+      if (spot && (spot.side === 'left' || spot.side === 'right') && typeof spot.yNorm === 'number') {
+        return spot;
+      }
+    } catch (_) { /* unreadable — fall back */ }
+    // Right edge, below the middle: where a right thumb rests, and clear
+    // of the status bar and the home indicator either way.
+    return { side: 'right', yNorm: 0.62 };
+  }
+
+  function placeHandheldButton() {
+    const fab = document.getElementById('nativeHandheldFab');
+    const button = window.Baguette && window.Baguette._HandheldButton;
+    if (!handheld || !fab || !button) return;
+    const at = button.place(Object.assign({}, storedHandheldSpot(), handheldButtonGeometry()));
+    fab.style.left = at.left + 'px';
+    fab.style.top = at.top + 'px';
+  }
+
+  /** Full strength now, faded after a few seconds of being left alone. */
+  function wakeHandheldButton() {
+    const fab = document.getElementById('nativeHandheldFab');
+    if (!fab) return;
+    fab.removeAttribute('data-idle');
+    clearTimeout(handheldIdleTimer);
+    handheldIdleTimer = setTimeout(() => fab.setAttribute('data-idle', ''), 3000);
+  }
+
+  /**
+   * Press, drag, lift. A press that lifts where it landed opens the
+   * menu; one that travels carries the button and drops it on the
+   * nearer side edge. Pointer events cover finger and mouse alike, and
+   * the capture keeps a fast drag from slipping off the button.
+   */
+  function wireHandheldButton() {
+    const fab = document.getElementById('nativeHandheldFab');
+    const button = window.Baguette && window.Baguette._HandheldButton;
+    if (handheldButtonWired || !fab || !button) return;
+    handheldButtonWired = true;
+    let press = null;
+    fab.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const r = fab.getBoundingClientRect();
+      press = { id: e.pointerId, x: e.clientX, y: e.clientY,
+                dx: e.clientX - r.left, dy: e.clientY - r.top, dragging: false };
+      try { fab.setPointerCapture(e.pointerId); } catch (_) {}
+      wakeHandheldButton();
+    });
+    fab.addEventListener('pointermove', (e) => {
+      if (!press || e.pointerId !== press.id) return;
+      if (!press.dragging && button.isTap({ dx: e.clientX - press.x, dy: e.clientY - press.y })) return;
+      press.dragging = true;
+      fab.setAttribute('data-dragging', '');
+      fab.style.left = (e.clientX - press.dx) + 'px';
+      fab.style.top = (e.clientY - press.dy) + 'px';
+    });
+    const lift = (e) => {
+      if (!press || e.pointerId !== press.id) return;
+      const was = press;
+      press = null;
+      fab.removeAttribute('data-dragging');
+      if (!was.dragging) {
+        setHandheldMenu(true);
+        return;
+      }
+      const geometry = handheldButtonGeometry();
+      const spot = button.rest({
+        x: e.clientX - was.dx + HANDHELD_BUTTON_SIZE / 2,
+        y: e.clientY - was.dy + HANDHELD_BUTTON_SIZE / 2,
+        viewport: geometry.viewport, size: HANDHELD_BUTTON_SIZE,
+      });
+      try { localStorage.setItem(HANDHELD_BUTTON_KEY, JSON.stringify(spot)); } catch (_) {}
+      placeHandheldButton();
+      wakeHandheldButton();
+    };
+    fab.addEventListener('pointerup', lift);
+    fab.addEventListener('pointercancel', lift);
+  }
+
+  /** Open (or close) the menu over its scrim. */
   function setHandheldMenu(open) {
     const ui = document.getElementById('nativeHandheldUI');
-    clearTimeout(handheldMenuTimer);
-    handheldMenuTimer = null;
     if (!ui) return;
     ui.setAttribute('data-open', open ? 'true' : 'false');
-    const grip = ui.querySelector('.hh-grip');
-    if (grip) grip.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (open) handheldMenuTimer = setTimeout(() => setHandheldMenu(false), 4000);
+    const fab = document.getElementById('nativeHandheldFab');
+    if (fab) fab.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (!open) wakeHandheldButton();
   }
 
   // One SDK simulator for a definition URL, wired to this page's
@@ -2145,17 +2263,13 @@
     window.__nativeToggleNetwork = () => toggleNetwork();
     window.__nativeToggle3D = () => toggle3D();
     window.__nativeEnterHandheld = () => enterHandheld();
-    window.__nativeHandheldMenu = () => {
-      const ui = document.getElementById('nativeHandheldUI');
-      setHandheldMenu(!(ui && ui.getAttribute('data-open') === 'true'));
-    };
+    window.__nativeHandheldMenu = (open) => setHandheldMenu(!!open);
     window.__nativeHandheldHintClose = () => hideHomeScreenHint();
     window.__nativeHandheldAction = (action) => {
-      if (action === 'exit') { exitHandheld(); return; }
-      if (action === 'rotate') window.__nativeRotate();
+      setHandheldMenu(false);
+      if (action === 'exit') exitHandheld();
+      else if (action === 'rotate') window.__nativeRotate();
       else if (sim) sim.pressButton(action);
-      // Keep the pill up a beat longer — the next press is often another.
-      setHandheldMenu(true);
     };
     window.__nativeToggle3DInspector = () => toggle3DInspector();
     // The watch's hardware buttons. Same `button` envelope the phone's
