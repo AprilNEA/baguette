@@ -1,0 +1,96 @@
+import Testing
+import Foundation
+import ArgumentParser
+@testable import Baguette
+
+/// `baguette defaults read|write|delete` — the flags map onto Domain
+/// values (`PreferenceDomain`, `PreferenceEdit`) the run path hands to
+/// `Defaults`, so the mapping is the thing worth pinning.
+@Suite("DefaultsCommand")
+struct DefaultsCommandTests {
+
+    @Test func `should offer read, write and delete under defaults`() {
+        #expect(DefaultsCommand.configuration.commandName == "defaults")
+        #expect(DefaultsCommand.configuration.subcommands.map { $0.configuration.commandName }
+            == ["read", "write", "delete"])
+    }
+
+    @Test func `should read the app's standard defaults when no suite is given`() throws {
+        let cmd = try DefaultsCommand.Read.parse(["--udid", "U", "--bundle-id", "com.x"])
+        #expect(try cmd.target.domain() == PreferenceDomain(bundleID: "com.x"))
+        #expect(cmd.key == nil)
+    }
+
+    @Test func `should read an App Group suite when one is given`() throws {
+        let cmd = try DefaultsCommand.Read.parse([
+            "--udid", "U", "--bundle-id", "com.x", "--suite", "group.x", "--key", "k", "--json",
+        ])
+        #expect(try cmd.target.domain() == PreferenceDomain(bundleID: "com.x", suite: "group.x"))
+        #expect(cmd.key == "k")
+        #expect(cmd.json)
+    }
+
+    @Test func `should write a value as the type given on the command line`() throws {
+        let cmd = try DefaultsCommand.Write.parse([
+            "--udid", "U", "--bundle-id", "com.x", "--key", "seen", "--type", "bool", "--value", "false",
+        ])
+        #expect(try cmd.edit() == PreferenceEdit(
+            domain: PreferenceDomain(bundleID: "com.x"), key: "seen", change: .set(.bool(false))
+        ))
+    }
+
+    @Test func `should quit and relaunch the app around a write when asked to`() throws {
+        let cmd = try DefaultsCommand.Write.parse([
+            "--udid", "U", "--bundle-id", "com.x", "--key", "n", "--type", "int", "--value", "3",
+            "--relaunch",
+        ])
+        #expect(try cmd.edit().relaunch)
+    }
+
+    @Test func `should refuse a write whose value is not of its type`() throws {
+        let cmd = try DefaultsCommand.Write.parse([
+            "--udid", "U", "--bundle-id", "com.x", "--key", "n", "--type", "int", "--value", "x",
+        ])
+        #expect(throws: PreferenceValueError.notA(.int, "x")) { try cmd.edit() }
+    }
+
+    @Test func `should refuse a write with an unknown type`() {
+        #expect(throws: (any Error).self) {
+            try DefaultsCommand.Write.parse([
+                "--udid", "U", "--bundle-id", "com.x", "--key", "n", "--type", "double", "--value", "1",
+            ])
+        }
+    }
+
+    @Test func `should remove a key from a suite`() throws {
+        let cmd = try DefaultsCommand.Delete.parse([
+            "--udid", "U", "--bundle-id", "com.x", "--suite", "group.x", "--key", "seen",
+        ])
+        #expect(try cmd.edit() == PreferenceEdit(
+            domain: PreferenceDomain(bundleID: "com.x", suite: "group.x"), key: "seen", change: .remove
+        ))
+    }
+
+    @Test func `should refuse a defaults command without a bundle id`() {
+        #expect(throws: (any Error).self) {
+            try DefaultsCommand.Read.parse(["--udid", "U"])
+        }
+    }
+
+    @Test func `should print each stored preference with its type, in key order`() {
+        let preferences = Preferences(values: [
+            "seen": .bool(false), "name": .string("Ada"), "tags": .array([.integer(1)]),
+        ])
+        #expect(DefaultsCommand.Read.text(preferences, key: nil) == """
+        name = Ada (string)
+        seen = false (bool)
+        tags = <array><integer>1</integer></array> (array)
+        """)
+    }
+
+    @Test func `should say a key is not set rather than print a value for it`() {
+        #expect(DefaultsCommand.Read.text(Preferences(values: [:]), key: "seen") == "seen is not set")
+        #expect(DefaultsCommand.Read.text(Preferences(values: ["seen": .integer(0)]), key: "seen")
+            == "seen = 0 (int)")
+    }
+}

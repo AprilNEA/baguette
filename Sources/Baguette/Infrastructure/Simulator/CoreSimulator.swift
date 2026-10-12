@@ -190,6 +190,10 @@ final class CoreSimulator: Simulator, @unchecked Sendable {
         SimctlApps(udid: udid)
     }
 
+    func defaults() -> any Defaults {
+        SimctlDefaults(udid: udid)
+    }
+
     func photos() -> any PhotoLibrary {
         SimctlPhotoLibrary(udid: udid)
     }

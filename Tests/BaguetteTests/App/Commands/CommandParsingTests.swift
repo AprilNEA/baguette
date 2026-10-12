@@ -24,7 +24,7 @@ struct CommandParsingTests {
             "install", "add-media",
             "openurl", "schemes",
             "plugin", "bakery", "diag-digitizer-trackpad", "lifetime", "interface",
-            "heal",
+            "heal", "defaults",
         ])
     }
 

@@ -231,6 +231,15 @@ Wired (use freely):
   setting. Neither can be set. Pairs with `describe-ui`: change the
   conditions, re-dump the tree, compare. See
   [`docs/features/interface/README.md`](../../docs/features/interface/README.md).
+- `defaults` — an installed app's persisted UserDefaults, typed, or an
+  App Group suite. CLI: `baguette defaults read|write|delete --udid <X>
+  --bundle-id <id> [--suite group.…] [--key k]`; `write` takes `--type
+  bool|int|float|string|date|data|plist --value …`; `--json` reads
+  `{"type":…,"value":…}` and `present:false` for an absent key. **A
+  running app may not see a write**: pass `--relaunch` (quit → write →
+  launch). HTTP: `GET /simulators/<X>/defaults.json`, `POST|DELETE
+  /simulators/<X>/defaults`. See
+  [`docs/features/defaults/README.md`](../../docs/features/defaults/README.md).
 - `logs` — stream the booted simulator's unified log line-by-line
   to stdout. CLI: `baguette logs --udid <X> [--level info|debug|default]
   [--style default|compact|json|ndjson|syslog] [--predicate ...]

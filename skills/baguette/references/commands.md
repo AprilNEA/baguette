@@ -8,7 +8,7 @@ Every `baguette` command and flag, generated from the binary. For how to use a f
 
 **Exit codes:** `0` on success, `1` on any error, `3` when an iPhone Duo `orientation` or `hinge` change is unconfirmed: its guest helper timed out, so the change may have landed and will not land later. Errors print `{"ok":false,"error":"…"}`, so parse stdout, not just the exit code.
 
-**Commands:** [list](#baguette-list) · [boot](#baguette-boot) · [shutdown](#baguette-shutdown) · [lifetime](#baguette-lifetime) · [input](#baguette-input) · [stream](#baguette-stream) · [tap](#baguette-tap) · [double-tap](#baguette-double-tap) · [swipe](#baguette-swipe) · [pinch](#baguette-pinch) · [pan](#baguette-pan) · [press](#baguette-press) · [key](#baguette-key) · [type](#baguette-type) · [paste](#baguette-paste) · [clipboard](#baguette-clipboard) · [chrome](#baguette-chrome) · [screenshot](#baguette-screenshot) · [record](#baguette-record) · [render-3d](#baguette-render-3d) · [describe-ui](#baguette-describe-ui) · [logs](#baguette-logs) · [serve](#baguette-serve) · [orientation](#baguette-orientation) · [hinge](#baguette-hinge) · [shake](#baguette-shake) · [status-bar](#baguette-status-bar) · [interface](#baguette-interface) · [location](#baguette-location) · [motion](#baguette-motion) · [network](#baguette-network) · [install](#baguette-install) · [add-media](#baguette-add-media) · [openurl](#baguette-openurl) · [schemes](#baguette-schemes) · [plugin](#baguette-plugin) · [bakery](#baguette-bakery) · [diag-digitizer-trackpad](#baguette-diag-digitizer-trackpad) · [heal](#baguette-heal)
+**Commands:** [list](#baguette-list) · [boot](#baguette-boot) · [shutdown](#baguette-shutdown) · [lifetime](#baguette-lifetime) · [input](#baguette-input) · [stream](#baguette-stream) · [tap](#baguette-tap) · [double-tap](#baguette-double-tap) · [swipe](#baguette-swipe) · [pinch](#baguette-pinch) · [pan](#baguette-pan) · [press](#baguette-press) · [key](#baguette-key) · [type](#baguette-type) · [paste](#baguette-paste) · [clipboard](#baguette-clipboard) · [chrome](#baguette-chrome) · [screenshot](#baguette-screenshot) · [record](#baguette-record) · [render-3d](#baguette-render-3d) · [describe-ui](#baguette-describe-ui) · [logs](#baguette-logs) · [serve](#baguette-serve) · [orientation](#baguette-orientation) · [hinge](#baguette-hinge) · [shake](#baguette-shake) · [status-bar](#baguette-status-bar) · [interface](#baguette-interface) · [location](#baguette-location) · [motion](#baguette-motion) · [network](#baguette-network) · [install](#baguette-install) · [add-media](#baguette-add-media) · [openurl](#baguette-openurl) · [schemes](#baguette-schemes) · [plugin](#baguette-plugin) · [bakery](#baguette-bakery) · [diag-digitizer-trackpad](#baguette-diag-digitizer-trackpad) · [heal](#baguette-heal) · [defaults](#baguette-defaults)
 
 ## baguette list
 
@@ -942,3 +942,57 @@ baguette heal --udid <udid>
 | Flag | Required | Default | Description |
 |---|---|---|---|
 | `--udid` | yes |  | Simulator UDID |
+
+## baguette defaults
+
+Read or edit an app's UserDefaults, typed, including App Group suites
+
+### baguette defaults read
+
+Print the app's persisted defaults, or one key
+
+```
+baguette defaults read --udid <udid> --bundle-id <bundle-id> [--suite <suite>] [--key <key>] [--json]
+```
+
+| Flag | Required | Default | Description |
+|---|---|---|---|
+| `--udid` | yes |  | Simulator UDID |
+| `--bundle-id` | yes |  | The app's bundle identifier |
+| `--suite` |  |  | An App Group suite (the group identifier) instead of the app's standard defaults |
+| `--key` |  |  | Read only this key (reports whether it is set) |
+| `--json` |  |  | Print typed JSON instead of text |
+
+### baguette defaults write
+
+Store a typed value under a key
+
+```
+baguette defaults write --udid <udid> --bundle-id <bundle-id> --key <key> --type <type> --value <value> [--suite <suite>] [--relaunch]
+```
+
+| Flag | Required | Default | Description |
+|---|---|---|---|
+| `--udid` | yes |  | Simulator UDID |
+| `--bundle-id` | yes |  | The app's bundle identifier |
+| `--suite` |  |  | An App Group suite (the group identifier) instead of the app's standard defaults |
+| `--key` | yes |  | The key to store under |
+| `--type` | yes |  | The value's type: bool \| int \| float \| string \| date \| data \| plist. plist takes an XML fragment, for arrays and dictionaries One of: bool, int, float, string, date, data, plist. |
+| `--value` | yes |  | The value, e.g. false, 3, 1.5, 2026-01-02T03:04:05Z, base64 data, or <array>…</array> |
+| `--relaunch` |  |  | Quit the app before writing and launch it after, so it starts from the new value |
+
+### baguette defaults delete
+
+Remove a key, leaving every other preference alone
+
+```
+baguette defaults delete --udid <udid> --bundle-id <bundle-id> --key <key> [--suite <suite>] [--relaunch]
+```
+
+| Flag | Required | Default | Description |
+|---|---|---|---|
+| `--udid` | yes |  | Simulator UDID |
+| `--bundle-id` | yes |  | The app's bundle identifier |
+| `--suite` |  |  | An App Group suite (the group identifier) instead of the app's standard defaults |
+| `--key` | yes |  | The key to remove |
+| `--relaunch` |  |  | Quit the app before removing and launch it after |

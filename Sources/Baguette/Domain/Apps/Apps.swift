@@ -37,6 +37,15 @@ protocol Apps: Sendable {
     /// non-zero; an app whose bundle can't be read still lists, with no
     /// schemes, rather than dropping out of the roster.
     func installed() async throws -> [InstalledApp]
+
+    /// Quit the app if it's running. An app that isn't running is
+    /// already where the caller wants it, so that isn't an error. Throws
+    /// `AppsError.terminateFailed` for any other simctl failure.
+    func terminate(bundleID: String) async throws
+
+    /// Launch the app. Throws `AppsError.launchFailed` when simctl exits
+    /// non-zero (not installed, device not booted, …).
+    func launch(bundleID: String) async throws
 }
 
 /// Failure modes surfaced when installing an app. Maps to a CLI exit
@@ -49,6 +58,8 @@ enum AppsError: Error, Equatable, CustomStringConvertible {
     case noAppInArchive
     case openFailed(status: Int32)
     case listFailed(status: Int32)
+    case terminateFailed(status: Int32)
+    case launchFailed(status: Int32)
 
     var description: String {
         switch self {
@@ -58,6 +69,10 @@ enum AppsError: Error, Equatable, CustomStringConvertible {
             return "xcrun simctl openurl exited \(status)"
         case .listFailed(let status):
             return "xcrun simctl listapps exited \(status)"
+        case .terminateFailed(let status):
+            return "xcrun simctl terminate exited \(status)"
+        case .launchFailed(let status):
+            return "xcrun simctl launch exited \(status)"
         case .extractFailed(let status):
             return "ditto -x -k exited \(status) (corrupt zip?)"
         case .archiveTooLarge(let bytes, let limit):

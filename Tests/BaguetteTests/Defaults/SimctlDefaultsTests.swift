@@ -1,0 +1,149 @@
+import Testing
+import Foundation
+import Mockable
+@testable import Baguette
+
+/// Orchestration coverage for `SimctlDefaults`: ask simctl for the
+/// container, then run the simulator's own `defaults` tool against the
+/// plist inside it. Every child is answered by `MockSubprocess`; the
+/// exit codes mirror what Xcode 27's simctl was measured to return.
+@Suite("SimctlDefaults")
+struct SimctlDefaultsTests {
+
+    final class Calls: @unchecked Sendable {
+        var argv: [[String]] = []
+    }
+
+    private static let container = "/sim/data/Containers/Data/Application/A1"
+    private static let plist = container + "/Library/Preferences/com.example.app.plist"
+
+    /// A device whose `get_app_container` answers `containerExit` and whose
+    /// `defaults` answers `defaultsExit` with `defaultsOutput`.
+    private func makeDefaults(
+        containerExit: Int32 = 0,
+        container: String = SimctlDefaultsTests.container + "\n",
+        defaultsExit: Int32 = 0,
+        defaultsOutput: String = ""
+    ) -> (SimctlDefaults, Calls) {
+        let sub = MockSubprocess()
+        let calls = Calls()
+        given(sub).run(
+            executable: .any, arguments: .any, onBytes: .any, onExit: .any
+        ).willProduce { _, args, onBytes, onExit in
+            calls.argv.append(args)
+            if args[1] == "get_app_container" {
+                if containerExit == 0 { onBytes(Data(container.utf8)) }
+                onExit(containerExit)
+            } else {
+                onBytes(Data(defaultsOutput.utf8))
+                onExit(defaultsExit)
+            }
+        }
+        return (SimctlDefaults(udid: "U", subprocess: sub), calls)
+    }
+
+    private static let app = try! PreferenceDomain(bundleID: "com.example.app")
+
+    @Test func `should read the app's preferences from the plist in its data container`() async throws {
+        let (defaults, calls) = makeDefaults(defaultsOutput: """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <plist version="1.0"><dict><key>seen</key><false/></dict></plist>
+        """)
+
+        let preferences = try await defaults.read(Self.app)
+
+        #expect(preferences.values == ["seen": .bool(false)])
+        #expect(calls.argv == [
+            ["simctl", "get_app_container", "U", "com.example.app", "data"],
+            ["simctl", "spawn", "U", "defaults", "export", Self.plist, "-"],
+        ])
+    }
+
+    @Test func `should store a value as a typed plist fragment`() async throws {
+        let (defaults, calls) = makeDefaults()
+
+        try await defaults.write(.integer(3), forKey: "launches", in: Self.app)
+
+        #expect(calls.argv.last
+            == ["simctl", "spawn", "U", "defaults", "write", Self.plist, "launches", "<integer>3</integer>"])
+    }
+
+    @Test func `should remove a key from the app's plist`() async throws {
+        let (defaults, calls) = makeDefaults()
+
+        try await defaults.delete(key: "seen", in: Self.app)
+
+        #expect(calls.argv.last == ["simctl", "spawn", "U", "defaults", "delete", Self.plist, "seen"])
+    }
+
+    @Test func `should read a suite from the plist in its App Group container`() async throws {
+        let (defaults, calls) = makeDefaults(
+            container: "group.other\t/sim/G0\ngroup.example\t/sim/data/Containers/Shared/AppGroup/G1\n",
+            defaultsOutput: #"<plist version="1.0"><dict/></plist>"#
+        )
+        let suite = try PreferenceDomain(bundleID: "com.example.app", suite: "group.example")
+
+        #expect(try await defaults.read(suite).values == [:])
+        #expect(calls.argv == [
+            ["simctl", "get_app_container", "U", "com.example.app", "groups"],
+            ["simctl", "spawn", "U", "defaults", "export",
+             "/sim/data/Containers/Shared/AppGroup/G1/Library/Preferences/group.example.plist", "-"],
+        ])
+    }
+
+    @Test func `should report an app that isn't installed`() async {
+        let (defaults, calls) = makeDefaults(containerExit: 2)
+        await #expect(throws: DefaultsError.appNotInstalled(bundleID: "com.example.app")) {
+            try await defaults.read(Self.app)
+        }
+        #expect(calls.argv.count == 1)
+    }
+
+    @Test func `should report an App Group the app doesn't belong to rather than use standard defaults`() async {
+        let (defaults, calls) = makeDefaults(container: "group.other\t/sim/G0\n")
+        let suite = try! PreferenceDomain(bundleID: "com.example.app", suite: "group.nope")
+        await #expect(throws: DefaultsError.groupNotFound(group: "group.nope", bundleID: "com.example.app")) {
+            try await defaults.write(.bool(true), forKey: "k", in: suite)
+        }
+        #expect(calls.argv.count == 1)
+    }
+
+    @Test func `should report a simulator that isn't booted`() async {
+        let (defaults, _) = makeDefaults(containerExit: 149)
+        await #expect(throws: DefaultsError.deviceNotBooted) {
+            try await defaults.read(Self.app)
+        }
+    }
+
+    @Test func `should report a defaults run that failed`() async {
+        let (defaults, _) = makeDefaults(defaultsExit: 1)
+        await #expect(throws: DefaultsError.simctlFailed(status: 1)) {
+            try await defaults.delete(key: "seen", in: Self.app)
+        }
+    }
+
+    @Test func `should report an export it can't read as a domain`() async {
+        let (defaults, _) = makeDefaults(defaultsOutput: "Invalid device")
+        await #expect(throws: DefaultsError.unreadableDomain) {
+            try await defaults.read(Self.app)
+        }
+    }
+
+    @Test func `should report a container it was never told`() async {
+        let (defaults, calls) = makeDefaults(container: "\n")
+        await #expect(throws: DefaultsError.simctlFailed(status: 0)) {
+            try await defaults.read(Self.app)
+        }
+        #expect(calls.argv.count == 1)
+    }
+
+    @Test func `should surface a spawn that could not start`() async {
+        let sub = MockSubprocess()
+        given(sub).run(executable: .any, arguments: .any, onBytes: .any, onExit: .any)
+            .willThrow(SubprocessError.notInteractive)
+        let defaults = SimctlDefaults(udid: "U", subprocess: sub)
+        await #expect(throws: SubprocessError.notInteractive) {
+            try await defaults.read(Self.app)
+        }
+    }
+}

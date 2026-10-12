@@ -114,6 +114,12 @@ protocol Simulator: Sendable {
     /// underlying `simctl install` invocation is stateless.
     func apps() -> any Apps
 
+    /// An installed app's persisted `UserDefaults` on this simulator —
+    /// its standard domain or an App Group suite. Each call returns a
+    /// fresh handle; the underlying `simctl spawn defaults` invocation is
+    /// stateless.
+    func defaults() -> any Defaults
+
     /// This simulator's photo library — import a `MediaItem` (image or
     /// video). Each call returns a fresh handle; the underlying `simctl
     /// addmedia` invocation is stateless.
