@@ -10,6 +10,9 @@ For releases prior to this changelog, see the
 
 ## [Unreleased]
 
+### Added
+- `baguette defaults read|write|delete|export|import` reads, edits and restores an app's persisted UserDefaults or an App Group suite, typed; `--relaunch` quits and relaunches the app so it sees the change. Also a Defaults card in `serve`. → [docs](docs/features/defaults/README.md) ([#115](https://github.com/tddworks/baguette/pull/115))
+
 ---
 
 ## [0.2.5] - 2026-10-12

@@ -59,6 +59,7 @@
   let statusBarPanel = null; // StatusBarPanel — simctl status_bar overrides
   let locationPanel = null;  // LocationPanel — simctl location map picker
   let networkPanel = null;   // NetworkPanel — latency / bandwidth / loss / offline
+  let defaultsPanel = null;  // DefaultsPanel — an app's typed UserDefaults
   let networkArmedTimer = null; // keeps the toolbar's armed dot honest while the card is shut
   let render3DPanel = null;  // Sim3DPanel — live SceneKit stream + inspector
   let lastPaintedSize = { w: 0, h: 0 };
@@ -1781,6 +1782,7 @@
       members: [
         { id: 'nativeAxToggle', label: 'Accessibility', role: 'state' },
         { id: 'nativeLogsToggle', label: 'Logs', role: 'state' },
+        { id: 'nativeDefaultsToggle', label: 'Defaults', role: 'state' },
       ],
     },
     {
@@ -2261,6 +2263,7 @@
     window.__nativeToggleStatusBar = () => toggleStatusBar();
     window.__nativeToggleLocation = () => toggleLocation();
     window.__nativeToggleNetwork = () => toggleNetwork();
+    window.__nativeToggleDefaults = () => toggleDefaults();
     window.__nativeToggle3D = () => toggle3D();
     window.__nativeEnterHandheld = () => enterHandheld();
     window.__nativeHandheldMenu = (open) => setHandheldMenu(!!open);
@@ -2482,6 +2485,34 @@
         networkPanel.attach(host, udid);
       } else if (networkPanel) {
         networkPanel.refresh();
+      }
+    }
+  }
+
+  // Defaults card — same lazy-mount pattern as the network card. Reopening
+  // re-reads the device, since the app under test may have rewritten its
+  // own preferences while the card was shut.
+  function toggleDefaults() {
+    const view = document.getElementById('simNativeView');
+    const host = document.getElementById('nativeDefaultsHost');
+    const btn  = document.getElementById('nativeDefaultsToggle');
+    const sheet = document.getElementById('nativeDefaultsSheet');
+    const open = view && view.getAttribute('data-defaults') === 'open';
+    if (!view || !host) return;
+    if (open) {
+      view.removeAttribute('data-defaults');
+      if (btn) btn.classList.remove('active');
+      if (sheet) { sheet.setAttribute('aria-hidden', 'true'); sheet.inert = true; }
+    } else {
+      view.setAttribute('data-defaults', 'open');
+      if (btn) btn.classList.add('active');
+      if (sheet) { sheet.setAttribute('aria-hidden', 'false'); sheet.inert = false; }
+      if (!defaultsPanel && window.DefaultsPanel && udid) {
+        host.innerHTML = '';
+        defaultsPanel = new window.DefaultsPanel();
+        defaultsPanel.attach(host, udid);
+      } else if (defaultsPanel) {
+        defaultsPanel.refresh();
       }
     }
   }

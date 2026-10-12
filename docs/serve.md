@@ -39,6 +39,8 @@ The server trusts only loopback `Host` / `Origin` values, so a request through a
 | `GET` `POST` | `/simulators/:udid/interface.json`, `/interface` | appearance, contrast, text size | [interface](features/interface/README.md) |
 | `POST` | `/simulators/:udid/shake` | motion shake | [shake](features/shake/README.md) |
 | `GET` `POST` `DELETE` | `/simulators/:udid/status-bar` | status-bar override | [status-bar](features/status-bar/README.md) |
+| `GET` `POST` `DELETE` | `/simulators/:udid/defaults.json`, `/defaults` | an app's typed UserDefaults, App Group suites | [defaults](features/defaults/README.md) |
+| `GET` `POST` | `/simulators/:udid/apps.json`, `/defaults-groups.json`, `/relaunch` | installed apps, an app's App Groups, quit + launch | [defaults](features/defaults/README.md#http) |
 | `POST` `DELETE` | `/simulators/:udid/location` | simulated GPS | [location](features/location/README.md) |
 | `GET` `POST` `DELETE` | `/simulators/:udid/motion` | injected CoreMotion | [motion](features/motion/README.md) |
 | `GET` `POST` `DELETE` | `/simulators/:udid/network` | injected network conditioning | [network](features/network/README.md) |

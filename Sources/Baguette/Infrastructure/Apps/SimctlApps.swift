@@ -78,6 +78,18 @@ final class SimctlApps: Apps, @unchecked Sendable {
         guard status == 0 else { throw AppsError.openFailed(status: status) }
     }
 
+    func terminate(bundleID: String) async throws {
+        let status = try await exitStatus(of: xcrun, arguments: ["simctl", "terminate", udid, bundleID])
+        // 3 is simctl's "found nothing to terminate" (Xcode 27): the app
+        // is already not running, which is what the caller asked for.
+        guard status == 0 || status == 3 else { throw AppsError.terminateFailed(status: status) }
+    }
+
+    func launch(bundleID: String) async throws {
+        let status = try await exitStatus(of: xcrun, arguments: ["simctl", "launch", udid, bundleID])
+        guard status == 0 else { throw AppsError.launchFailed(status: status) }
+    }
+
     func installed() async throws -> [InstalledApp] {
         let (status, output) = try await capture(
             of: xcrun, arguments: ["simctl", "listapps", udid]

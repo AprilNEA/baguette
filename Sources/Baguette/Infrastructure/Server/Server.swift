@@ -182,6 +182,7 @@ struct Server: Sendable {
         registerInterfaceRoutes(on: router, rejectUntrustedBrowser: rejectUntrustedBrowser)
         registerCompanionScreenRoutes(on: router, rejectUntrustedBrowser: rejectUntrustedBrowser)
         registerDeepLinkRoutes(on: router, rejectUntrustedBrowser: rejectUntrustedBrowser)
+        registerDefaultsRoutes(on: router, rejectUntrustedBrowser: rejectUntrustedBrowser)
         registerDeviceTwinRoutes(
             on: router,
             rejectUntrustedBrowser: rejectUntrustedBrowser,
@@ -965,6 +966,7 @@ struct Server: Sendable {
         "carplay-frames",
         "carplay-frames/cupra",
         "carplay-frames/plain",
+        "defaults",
         "sim-list",
         "farm",
         "handheld",
@@ -1821,10 +1823,10 @@ struct Server: Sendable {
             switch error {
             case .extractFailed, .archiveTooLarge, .noAppInArchive:
                 return .badArchive(reason: error.description)
-            // `openFailed` / `listFailed` can't reach an upload, but the
+            // `openFailed` / `listFailed` / the lifecycle cases can't reach an upload, but the
             // switch has to name them: the compiler is the only thing
             // that will notice when a new `AppsError` case does.
-            case .installFailed, .openFailed, .listFailed:
+            case .installFailed, .openFailed, .listFailed, .terminateFailed, .launchFailed:
                 return .dispatchFailed
             }
         } catch {
