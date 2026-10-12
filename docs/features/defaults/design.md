@@ -8,7 +8,7 @@ description: How baguette defaults finds an app's preferences plist through simc
 
 - CLI `baguette defaults read|write|delete`, `GET /simulators/<UDID>/defaults.json`,
   `POST|DELETE /simulators/<UDID>/defaults`
-- → `PreferenceDomain` (which container, which plist) + `PreferenceValue` (typed value)
+- → `PreferenceSuite` (which container, which plist) + `PreferenceValue` (typed value)
   → `PreferenceEdit` (the optional quit / relaunch around a change)
 - → `Defaults` (`Simulator.defaults()` vends a fresh handle) → `SimctlDefaults`, two
   `Subprocess` children per operation:
@@ -53,7 +53,7 @@ simctl's help offers a named-group form. On Xcode 27 it exits `117` and prints
 usage even for a group the app *does* have (Safari and
 `group.com.apple.BrowserKit`, which `… groups` lists). The adapter therefore
 asks for `groups`, which prints `<group id>\t<path>` lines, and picks the
-suite out of them (`PreferenceDomain.plistPath(inContainerOutput:)`). A suite
+suite out of them (`PreferenceSuite.plistPath(inContainerOutput:)`). A suite
 missing from that listing is `groupNotFound`. That keeps a misspelt or
 unentitled group from silently landing in standard defaults.
 
@@ -61,13 +61,13 @@ Only a suite starting `group.` is looked up this way. Apple requires that
 prefix on every App Group id, so any other suite
 (`UserDefaults(suiteName: "com.x.debug")`) is the app's own: CFPreferences
 keeps it in the app's data container as `Library/Preferences/<suite>.plist`.
-The split is decided by the name alone (`PreferenceDomain.group`), never by
+The split is decided by the name alone (`PreferenceSuite.group`), never by
 whether a lookup happened to succeed.
 
 ## Identifiers
 
 The bundle id and suite become a path component and a simctl argument, so
-`PreferenceDomain` refuses empty values, `/`, `..` and a leading `-` before
+`PreferenceSuite` refuses empty values, `/`, `..` and a leading `-` before
 either sees them. That matters on the HTTP route, where they come from a query
 string.
 

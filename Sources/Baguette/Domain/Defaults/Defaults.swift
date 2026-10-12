@@ -1,7 +1,7 @@
 import Foundation
 import Mockable
 
-/// An app's persisted `UserDefaults` on a device — read a domain, store a
+/// An app's persisted `UserDefaults` on a device — read a suite, store a
 /// typed value under a key, remove a key. Named for what it is to the
 /// developer ("the app's defaults"), like `Apps` / `StatusBar`.
 ///
@@ -16,17 +16,17 @@ import Mockable
 /// `SimctlDefaults`.
 @Mockable
 protocol Defaults: Sendable {
-    /// Every persisted value in `domain`. A domain the app has never
+    /// Every persisted value in `suite`. A suite the app has never
     /// written reads as no values.
-    func read(_ domain: PreferenceDomain) async throws -> Preferences
+    func read(_ suite: PreferenceSuite) async throws -> Preferences
 
     /// Store `value` under `key`, its type intact. Unrelated keys are
     /// untouched.
-    func write(_ value: PreferenceValue, forKey key: String, in domain: PreferenceDomain) async throws
+    func write(_ value: PreferenceValue, forKey key: String, in suite: PreferenceSuite) async throws
 
     /// Remove `key`. Throws `DefaultsError.simctlFailed` when it isn't
     /// stored — `PreferenceEdit` reads first so callers never see that.
-    func delete(key: String, in domain: PreferenceDomain) async throws
+    func delete(key: String, in suite: PreferenceSuite) async throws
 }
 
 /// Why a defaults operation failed, each with the step the user can take.
@@ -39,7 +39,7 @@ enum DefaultsError: Error, Equatable, CustomStringConvertible {
     case groupNotFound(group: String, bundleID: String)
     /// simctl exited 149 — the device is shut down.
     case deviceNotBooted
-    /// `defaults export` printed something that isn't a domain.
+    /// `defaults export` printed something that isn't a preferences plist.
     case unreadableDomain
     /// Any other non-zero simctl exit.
     case simctlFailed(status: Int32)
@@ -53,7 +53,7 @@ enum DefaultsError: Error, Equatable, CustomStringConvertible {
         case .deviceNotBooted:
             return "the simulator is not booted (run `baguette boot`)"
         case .unreadableDomain:
-            return "defaults export printed something that is not a preferences domain"
+            return "defaults export printed something that is not a preferences plist"
         case .simctlFailed(let status):
             return "xcrun simctl exited \(status)"
         }

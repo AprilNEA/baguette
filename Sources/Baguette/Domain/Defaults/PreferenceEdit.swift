@@ -16,13 +16,13 @@ public struct PreferenceEdit: Equatable, Sendable {
         case remove
     }
 
-    public let domain: PreferenceDomain
+    public let suite: PreferenceSuite
     public let key: String
     public let change: Change
     public let relaunch: Bool
 
-    public init(domain: PreferenceDomain, key: String, change: Change, relaunch: Bool = false) {
-        self.domain = domain
+    public init(suite: PreferenceSuite, key: String, change: Change, relaunch: Bool = false) {
+        self.suite = suite
         self.key = key
         self.change = change
         self.relaunch = relaunch
@@ -35,17 +35,17 @@ public struct PreferenceEdit: Equatable, Sendable {
     /// When storing fails the app stays quit: launching it would hide the
     /// failure behind a running app showing the old value.
     func apply(on defaults: any Defaults, apps: any Apps) async throws -> Bool {
-        if relaunch { try await apps.terminate(bundleID: domain.bundleID) }
+        if relaunch { try await apps.terminate(bundleID: suite.bundleID) }
         let changed: Bool
         switch change {
         case .set(let value):
-            try await defaults.write(value, forKey: key, in: domain)
+            try await defaults.write(value, forKey: key, in: suite)
             changed = true
         case .remove:
-            changed = try await defaults.read(domain).values[key] != nil
-            if changed { try await defaults.delete(key: key, in: domain) }
+            changed = try await defaults.read(suite).values[key] != nil
+            if changed { try await defaults.delete(key: key, in: suite) }
         }
-        if relaunch { try await apps.launch(bundleID: domain.bundleID) }
+        if relaunch { try await apps.launch(bundleID: suite.bundleID) }
         return changed
     }
 }

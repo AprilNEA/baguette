@@ -4,7 +4,7 @@ import Foundation
 /// `baguette defaults <read|write|delete> --udid <UDID> --bundle-id <id> [--suite <group>] …`
 ///
 /// Reads and edits an installed app's persisted `UserDefaults` — its
-/// standard domain, or an App Group suite — with every value typed. The
+/// standard defaults, or a named suite — with every value typed. The
 /// container lookup and `defaults` spawn live in
 /// `Infrastructure/Defaults/SimctlDefaults.swift`; the value types and the
 /// quit / relaunch around an edit in `Domain/Defaults/`.
@@ -25,8 +25,8 @@ struct DefaultsCommand: ParsableCommand {
         @Option(help: "An App Group suite (the group identifier) instead of the app's standard defaults")
         var suite: String?
 
-        func domain() throws -> PreferenceDomain {
-            try PreferenceDomain(bundleID: bundleID, suite: suite)
+        func preferenceSuite() throws -> PreferenceSuite {
+            try PreferenceSuite(bundleID: bundleID, name: suite)
         }
 
         func simulator() throws -> any Simulator {
@@ -57,10 +57,10 @@ struct DefaultsCommand: ParsableCommand {
 
         func run() async throws {
             let preferences: Preferences
-            let domain: PreferenceDomain
+            let suite: PreferenceSuite
             do {
-                domain = try target.domain()
-                preferences = try await target.simulator().defaults().read(domain)
+                suite = try target.preferenceSuite()
+                preferences = try await target.simulator().defaults().read(suite)
             } catch let exit as ExitCode {
                 throw exit
             } catch {
@@ -71,7 +71,7 @@ struct DefaultsCommand: ParsableCommand {
                 print(Self.text(preferences, key: key))
                 return
             }
-            let object = key.map(preferences.json(forKey:)) ?? preferences.json(in: domain)
+            let object = key.map(preferences.json(forKey:)) ?? preferences.json(in: suite)
             let data = try JSONSerialization.data(
                 withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes]
             )
@@ -127,7 +127,7 @@ struct DefaultsCommand: ParsableCommand {
 
         func edit() throws -> PreferenceEdit {
             PreferenceEdit(
-                domain: try target.domain(),
+                suite: try target.preferenceSuite(),
                 key: key,
                 change: .set(try PreferenceValue.parse(type: type, value: value)),
                 relaunch: relaunch
@@ -165,7 +165,7 @@ struct DefaultsCommand: ParsableCommand {
         var relaunch = false
 
         func edit() throws -> PreferenceEdit {
-            PreferenceEdit(domain: try target.domain(), key: key, change: .remove, relaunch: relaunch)
+            PreferenceEdit(suite: try target.preferenceSuite(), key: key, change: .remove, relaunch: relaunch)
         }
 
         func run() async throws {

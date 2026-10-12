@@ -4,7 +4,7 @@ import ArgumentParser
 @testable import Baguette
 
 /// `baguette defaults read|write|delete` — the flags map onto Domain
-/// values (`PreferenceDomain`, `PreferenceEdit`) the run path hands to
+/// values (`PreferenceSuite`, `PreferenceEdit`) the run path hands to
 /// `Defaults`, so the mapping is the thing worth pinning.
 @Suite("DefaultsCommand")
 struct DefaultsCommandTests {
@@ -17,7 +17,7 @@ struct DefaultsCommandTests {
 
     @Test func `should read the app's standard defaults when no suite is given`() throws {
         let cmd = try DefaultsCommand.Read.parse(["--udid", "U", "--bundle-id", "com.x"])
-        #expect(try cmd.target.domain() == PreferenceDomain(bundleID: "com.x"))
+        #expect(try cmd.target.preferenceSuite() == PreferenceSuite(bundleID: "com.x"))
         #expect(cmd.key == nil)
     }
 
@@ -25,7 +25,7 @@ struct DefaultsCommandTests {
         let cmd = try DefaultsCommand.Read.parse([
             "--udid", "U", "--bundle-id", "com.x", "--suite", "group.x", "--key", "k", "--json",
         ])
-        #expect(try cmd.target.domain() == PreferenceDomain(bundleID: "com.x", suite: "group.x"))
+        #expect(try cmd.target.preferenceSuite() == PreferenceSuite(bundleID: "com.x", name: "group.x"))
         #expect(cmd.key == "k")
         #expect(cmd.json)
     }
@@ -35,7 +35,7 @@ struct DefaultsCommandTests {
             "--udid", "U", "--bundle-id", "com.x", "--key", "seen", "--type", "bool", "--value", "false",
         ])
         #expect(try cmd.edit() == PreferenceEdit(
-            domain: PreferenceDomain(bundleID: "com.x"), key: "seen", change: .set(.bool(false))
+            suite: PreferenceSuite(bundleID: "com.x"), key: "seen", change: .set(.bool(false))
         ))
     }
 
@@ -67,7 +67,7 @@ struct DefaultsCommandTests {
             "--udid", "U", "--bundle-id", "com.x", "--suite", "group.x", "--key", "seen",
         ])
         #expect(try cmd.edit() == PreferenceEdit(
-            domain: PreferenceDomain(bundleID: "com.x", suite: "group.x"), key: "seen", change: .remove
+            suite: PreferenceSuite(bundleID: "com.x", name: "group.x"), key: "seen", change: .remove
         ))
     }
 

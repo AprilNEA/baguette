@@ -66,7 +66,7 @@ public indirect enum PreferenceValue: Equatable, Sendable {
     ///
     /// Booleans and numbers both arrive as `NSNumber`, so the CF type
     /// decides: a stored `<true/>` must read back as a bool and a stored
-    /// `<real>1</real>` as a real, or reading a domain and writing it back
+    /// `<real>1</real>` as a real, or reading a suite and writing it back
     /// would change it.
     public init?(plist: Any) {
         switch plist {

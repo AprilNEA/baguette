@@ -1,44 +1,44 @@
 import Foundation
 
-/// Which preferences: an app's standard defaults, or a named suite —
-/// one of its App Groups (`UserDefaults(suiteName: "group.…")`) or a
-/// suite of its own.
+/// A set of an app's preferences: its standard defaults
+/// (`UserDefaults.standard`), or a named suite — one of its App Groups
+/// (`UserDefaults(suiteName: "group.…")`) or a suite of its own.
 ///
-/// The domain never guesses a container path. CoreSimulator's
+/// It never guesses a container path. CoreSimulator's
 /// `…/Containers/Data/Application/<uuid>/` layout is undocumented and the
 /// UUID changes on every reinstall, so `containerArguments` asks simctl
 /// for it; only the plist *inside* the reported container is ours to
 /// name. For an App Group, simctl lists the groups the app's own entitlements
 /// grant, so a group the app doesn't belong to fails loudly instead of
 /// quietly landing in standard defaults.
-public struct PreferenceDomain: Equatable, Sendable {
+public struct PreferenceSuite: Equatable, Sendable {
     public let bundleID: String
-    /// A named suite, or `nil` for the app's standard defaults. A suite
+    /// The `suiteName`, or `nil` for the app's standard defaults. A name
     /// starting `group.` is an App Group (Apple requires the prefix) and
-    /// lives in that group's container; any other suite
+    /// lives in that group's container; any other name
     /// (`UserDefaults(suiteName: "com.example.debug")`) is the app's own
     /// and lives in its data container. Either way the plist is named for
-    /// the suite.
-    public let suite: String?
+    /// it.
+    public let name: String?
 
     /// The App Group this suite lives in, or `nil` when the preferences
     /// are in the app's own data container.
     public var group: String? {
-        suite.flatMap { $0.hasPrefix("group.") ? $0 : nil }
+        name.flatMap { $0.hasPrefix("group.") ? $0 : nil }
     }
 
     /// Both identifiers become a path component and a simctl argument, so
     /// anything that could climb out of the container (`/`, `..`) or read
     /// as a flag (`-…`) is refused here, before it reaches either.
-    public init(bundleID: String, suite: String? = nil) throws {
+    public init(bundleID: String, name: String? = nil) throws {
         guard Self.isIdentifier(bundleID) else {
-            throw PreferenceDomainError.invalidIdentifier(bundleID)
+            throw PreferenceSuiteError.invalidIdentifier(bundleID)
         }
-        if let suite, !Self.isIdentifier(suite) {
-            throw PreferenceDomainError.invalidIdentifier(suite)
+        if let name, !Self.isIdentifier(name) {
+            throw PreferenceSuiteError.invalidIdentifier(name)
         }
         self.bundleID = bundleID
-        self.suite = suite
+        self.name = name
     }
 
     /// `xcrun` argv that prints where these preferences live: the app's
@@ -65,7 +65,7 @@ public struct PreferenceDomain: Equatable, Sendable {
             container = output.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         guard let container, !container.isEmpty else { return nil }
-        return container + "/Library/Preferences/\(suite ?? bundleID).plist"
+        return container + "/Library/Preferences/\(name ?? bundleID).plist"
     }
 
     private static func isIdentifier(_ text: String) -> Bool {
@@ -73,7 +73,7 @@ public struct PreferenceDomain: Equatable, Sendable {
     }
 }
 
-public enum PreferenceDomainError: Error, Equatable, CustomStringConvertible {
+public enum PreferenceSuiteError: Error, Equatable, CustomStringConvertible {
     case invalidIdentifier(String)
 
     public var description: String {

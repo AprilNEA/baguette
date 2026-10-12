@@ -9,7 +9,7 @@ import Foundation
 ///    `cfprefsd` and so can't race the daemon's cache the way a host-side
 ///    file edit would.
 ///
-/// The orchestration (argv assembly via `PreferenceDomain` /
+/// The orchestration (argv assembly via `PreferenceSuite` /
 /// `PreferenceValue`, exit-code mapping, export parsing) is unit-covered
 /// through `MockSubprocess`; only `HostSubprocess`'s real spawn is
 /// integration-only.
@@ -28,20 +28,20 @@ final class SimctlDefaults: Defaults, @unchecked Sendable {
         self.xcrun = xcrun
     }
 
-    func read(_ domain: PreferenceDomain) async throws -> Preferences {
-        let output = try await defaults(["export", plist(of: domain), "-"])
+    func read(_ suite: PreferenceSuite) async throws -> Preferences {
+        let output = try await defaults(["export", plist(of: suite), "-"])
         guard let preferences = Preferences(export: output) else {
             throw DefaultsError.unreadableDomain
         }
         return preferences
     }
 
-    func write(_ value: PreferenceValue, forKey key: String, in domain: PreferenceDomain) async throws {
-        _ = try await defaults(["write", plist(of: domain), key, value.xmlFragment])
+    func write(_ value: PreferenceValue, forKey key: String, in suite: PreferenceSuite) async throws {
+        _ = try await defaults(["write", plist(of: suite), key, value.xmlFragment])
     }
 
-    func delete(key: String, in domain: PreferenceDomain) async throws {
-        _ = try await defaults(["delete", plist(of: domain), key])
+    func delete(key: String, in suite: PreferenceSuite) async throws {
+        _ = try await defaults(["delete", plist(of: suite), key])
     }
 
     // MARK: - the two children
@@ -49,16 +49,16 @@ final class SimctlDefaults: Defaults, @unchecked Sendable {
     /// The preferences plist inside the container simctl reports. Exit
     /// codes measured against Xcode 27: 2 = no such app, 149 = shut down.
     /// A suite missing from the app's group listing is `groupNotFound`.
-    private func plist(of domain: PreferenceDomain) async throws -> String {
-        let (status, output) = try await capture(domain.containerArguments(udid: udid))
+    private func plist(of suite: PreferenceSuite) async throws -> String {
+        let (status, output) = try await capture(suite.containerArguments(udid: udid))
         switch status {
         case 0: break
-        case 2: throw DefaultsError.appNotInstalled(bundleID: domain.bundleID)
+        case 2: throw DefaultsError.appNotInstalled(bundleID: suite.bundleID)
         default: throw Self.failure(status)
         }
-        guard let plist = domain.plistPath(inContainerOutput: String(decoding: output, as: UTF8.self)) else {
-            if let group = domain.group {
-                throw DefaultsError.groupNotFound(group: group, bundleID: domain.bundleID)
+        guard let plist = suite.plistPath(inContainerOutput: String(decoding: output, as: UTF8.self)) else {
+            if let group = suite.group {
+                throw DefaultsError.groupNotFound(group: group, bundleID: suite.bundleID)
             }
             throw DefaultsError.simctlFailed(status: status)
         }

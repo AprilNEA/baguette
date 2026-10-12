@@ -15,7 +15,7 @@ struct PreferenceEditTests {
         var steps: [String] = []
     }
 
-    private static let domain = try! PreferenceDomain(bundleID: "com.example.app")
+    private static let suite = try! PreferenceSuite(bundleID: "com.example.app")
 
     private func host(
         stored: [String: PreferenceValue] = [:],
@@ -43,7 +43,7 @@ struct PreferenceEditTests {
 
     @Test func `should store a value and leave the app alone when not asked to relaunch`() async throws {
         let (defaults, apps, journal) = host()
-        let edit = PreferenceEdit(domain: Self.domain, key: "seen", change: .set(.bool(false)))
+        let edit = PreferenceEdit(suite: Self.suite, key: "seen", change: .set(.bool(false)))
 
         let changed = try await edit.apply(on: defaults, apps: apps)
 
@@ -54,7 +54,7 @@ struct PreferenceEditTests {
     @Test func `should quit the app before storing and launch it after when asked to relaunch`() async throws {
         let (defaults, apps, journal) = host()
         let edit = PreferenceEdit(
-            domain: Self.domain, key: "seen", change: .set(.bool(false)), relaunch: true
+            suite: Self.suite, key: "seen", change: .set(.bool(false)), relaunch: true
         )
 
         _ = try await edit.apply(on: defaults, apps: apps)
@@ -65,7 +65,7 @@ struct PreferenceEditTests {
 
     @Test func `should remove a stored key`() async throws {
         let (defaults, apps, journal) = host(stored: ["seen": .bool(true), "other": .integer(1)])
-        let edit = PreferenceEdit(domain: Self.domain, key: "seen", change: .remove)
+        let edit = PreferenceEdit(suite: Self.suite, key: "seen", change: .remove)
 
         #expect(try await edit.apply(on: defaults, apps: apps))
         #expect(journal.steps == ["delete seen"])
@@ -73,7 +73,7 @@ struct PreferenceEditTests {
 
     @Test func `should report nothing removed when the key was never stored`() async throws {
         let (defaults, apps, journal) = host(stored: ["other": .integer(1)])
-        let edit = PreferenceEdit(domain: Self.domain, key: "seen", change: .remove, relaunch: true)
+        let edit = PreferenceEdit(suite: Self.suite, key: "seen", change: .remove, relaunch: true)
 
         #expect(try await edit.apply(on: defaults, apps: apps) == false)
         #expect(journal.steps == ["terminate com.example.app", "launch com.example.app"])
@@ -82,7 +82,7 @@ struct PreferenceEditTests {
     @Test func `should leave the app quit when storing fails`() async {
         let (defaults, apps, journal) = host(writeFails: true)
         let edit = PreferenceEdit(
-            domain: Self.domain, key: "seen", change: .set(.bool(false)), relaunch: true
+            suite: Self.suite, key: "seen", change: .set(.bool(false)), relaunch: true
         )
 
         await #expect(throws: DefaultsError.simctlFailed(status: 1)) {

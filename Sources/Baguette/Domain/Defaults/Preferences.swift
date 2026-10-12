@@ -1,6 +1,6 @@
 import Foundation
 
-/// The persisted preferences of one domain, as `defaults export` printed
+/// The persisted preferences of one suite, as `defaults export` printed
 /// them — every value typed. Registered defaults (`register(defaults:)`)
 /// live only in the app's memory and never appear here.
 public struct Preferences: Equatable, Sendable {
@@ -12,7 +12,7 @@ public struct Preferences: Equatable, Sendable {
 
     /// Read `defaults export <domain> -` output. `nil` when it isn't a
     /// plist dictionary, so garbage on stdout is an error rather than an
-    /// empty domain. A domain with nothing stored exports `<dict/>` and
+    /// empty suite. One with nothing stored exports `<dict/>` and
     /// reads as no values.
     public init?(export data: Data) {
         guard let plist = try? PropertyListSerialization.propertyList(
@@ -30,12 +30,12 @@ public struct Preferences: Equatable, Sendable {
         values.mapValues(\.json)
     }
 
-    /// The whole domain as a read answers it — which app and suite it
+    /// The whole suite as a read answers it — which app and suite it
     /// came from, then every value typed. `suite` is omitted for an
     /// app's standard defaults.
-    public func json(in domain: PreferenceDomain) -> [String: Any] {
-        var envelope: [String: Any] = ["bundleId": domain.bundleID, "values": json]
-        if let suite = domain.suite { envelope["suite"] = suite }
+    public func json(in suite: PreferenceSuite) -> [String: Any] {
+        var envelope: [String: Any] = ["bundleId": suite.bundleID, "values": json]
+        if let name = suite.name { envelope["suite"] = name }
         return envelope
     }
 

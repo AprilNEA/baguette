@@ -80,20 +80,20 @@ extension Server {
         case failed(String)
     }
 
-    /// The whole domain, or one key as present / absent.
+    /// The whole suite, or one key as present / absent.
     static func readDefaults(
         udid: String, query: [String: String], simulators: any Simulators
     ) async -> DefaultsOutcome {
-        let domain: PreferenceDomain
+        let suite: PreferenceSuite
         do {
-            domain = try PreferenceDomain(bundleID: query["bundleId"] ?? "", suite: query["suite"])
+            suite = try PreferenceSuite(bundleID: query["bundleId"] ?? "", name: query["suite"])
         } catch {
             return .badRequest("\(error)")
         }
         guard !udid.isEmpty, let sim = simulators.find(udid: udid) else { return .unknownDevice }
         do {
-            let preferences = try await sim.defaults().read(domain)
-            let json = query["key"].map(preferences.json(forKey:)) ?? preferences.json(in: domain)
+            let preferences = try await sim.defaults().read(suite)
+            let json = query["key"].map(preferences.json(forKey:)) ?? preferences.json(in: suite)
             return .ok(jsonString(json))
         } catch {
             return outcome(for: error)
@@ -122,8 +122,8 @@ extension Server {
         let edit: PreferenceEdit
         do {
             edit = PreferenceEdit(
-                domain: try PreferenceDomain(
-                    bundleID: fields["bundleId"] as? String ?? "", suite: fields["suite"] as? String
+                suite: try PreferenceSuite(
+                    bundleID: fields["bundleId"] as? String ?? "", name: fields["suite"] as? String
                 ),
                 key: key,
                 change: .set(try PreferenceValue.parse(type: type, value: text)),
@@ -143,7 +143,7 @@ extension Server {
         let edit: PreferenceEdit
         do {
             edit = PreferenceEdit(
-                domain: try PreferenceDomain(bundleID: query["bundleId"] ?? "", suite: query["suite"]),
+                suite: try PreferenceSuite(bundleID: query["bundleId"] ?? "", name: query["suite"]),
                 key: key,
                 change: .remove,
                 relaunch: ["1", "true"].contains(query["relaunch"] ?? "")

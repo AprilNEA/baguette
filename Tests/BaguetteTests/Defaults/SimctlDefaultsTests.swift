@@ -42,7 +42,7 @@ struct SimctlDefaultsTests {
         return (SimctlDefaults(udid: "U", subprocess: sub), calls)
     }
 
-    private static let app = try! PreferenceDomain(bundleID: "com.example.app")
+    private static let app = try! PreferenceSuite(bundleID: "com.example.app")
 
     @Test func `should read the app's preferences from the plist in its data container`() async throws {
         let (defaults, calls) = makeDefaults(defaultsOutput: """
@@ -81,7 +81,7 @@ struct SimctlDefaultsTests {
             container: "group.other\t/sim/G0\ngroup.example\t/sim/data/Containers/Shared/AppGroup/G1\n",
             defaultsOutput: #"<plist version="1.0"><dict/></plist>"#
         )
-        let suite = try PreferenceDomain(bundleID: "com.example.app", suite: "group.example")
+        let suite = try PreferenceSuite(bundleID: "com.example.app", name: "group.example")
 
         #expect(try await defaults.read(suite).values == [:])
         #expect(calls.argv == [
@@ -101,7 +101,7 @@ struct SimctlDefaultsTests {
 
     @Test func `should report an App Group the app doesn't belong to rather than use standard defaults`() async {
         let (defaults, calls) = makeDefaults(container: "group.other\t/sim/G0\n")
-        let suite = try! PreferenceDomain(bundleID: "com.example.app", suite: "group.nope")
+        let suite = try! PreferenceSuite(bundleID: "com.example.app", name: "group.nope")
         await #expect(throws: DefaultsError.groupNotFound(group: "group.nope", bundleID: "com.example.app")) {
             try await defaults.write(.bool(true), forKey: "k", in: suite)
         }
@@ -110,7 +110,7 @@ struct SimctlDefaultsTests {
 
     @Test func `should report a container it was never told for a suite that is not an App Group`() async {
         let (defaults, _) = makeDefaults(container: "")
-        let suite = try! PreferenceDomain(bundleID: "com.example.app", suite: "com.example.debug")
+        let suite = try! PreferenceSuite(bundleID: "com.example.app", name: "com.example.debug")
         await #expect(throws: DefaultsError.simctlFailed(status: 0)) {
             try await defaults.read(suite)
         }
@@ -130,7 +130,7 @@ struct SimctlDefaultsTests {
         }
     }
 
-    @Test func `should report an export it can't read as a domain`() async {
+    @Test func `should report an export it can't read as a suite`() async {
         let (defaults, _) = makeDefaults(defaultsOutput: "Invalid device")
         await #expect(throws: DefaultsError.unreadableDomain) {
             try await defaults.read(Self.app)

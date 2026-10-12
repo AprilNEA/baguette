@@ -31,8 +31,8 @@ struct DefaultsRoutesTests {
             given(defaults).write(.any, forKey: .any, in: .any).willThrow(failure)
         } else {
             given(defaults).read(.any).willReturn(Preferences(values: stored))
-            given(defaults).write(.any, forKey: .any, in: .any).willProduce { value, key, domain in
-                journal.steps.append("write \(domain.suite ?? domain.bundleID) \(key)=\(value.xmlFragment)")
+            given(defaults).write(.any, forKey: .any, in: .any).willProduce { value, key, suite in
+                journal.steps.append("write \(suite.name ?? suite.bundleID) \(key)=\(value.xmlFragment)")
             }
         }
         given(defaults).delete(key: .any, in: .any).willProduce { key, _ in
@@ -45,7 +45,7 @@ struct DefaultsRoutesTests {
 
     // MARK: - read
 
-    @Test func `should read an app's whole defaults domain`() async {
+    @Test func `should read every preference an app stores`() async {
         let (simulators, _) = host()
         let outcome = await Server.readDefaults(
             udid: "U", query: ["bundleId": "com.x"], simulators: simulators
