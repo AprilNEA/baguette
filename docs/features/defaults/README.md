@@ -128,4 +128,5 @@ capability reaches these routes.
 
 - [design.md](design.md): the simctl path, measured exit codes, and why the
   group lookup lists every group
+- [mockup.html](mockup.html): the card's design mockup, with its empty, suite, error and relaunch-off states
 - [deep-links](../deep-links/README.md): drive the app to a screen after setup
