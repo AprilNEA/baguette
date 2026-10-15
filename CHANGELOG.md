@@ -10,6 +10,10 @@ For releases prior to this changelog, see the
 
 ## [Unreleased]
 
+---
+
+## [0.2.7] - 2026-10-15
+
 ### Added
 - `baguette defaults read` and the Defaults card now list the settings a running app reads but hasn't stored yet (`@AppStorage` defaults, `register(defaults:)`), typed, so you can set them on a fresh install. → [docs](docs/features/defaults/README.md#workflows) ([#116](https://github.com/tddworks/baguette/pull/116))
 - `defaults … --relaunch-if-needed` and the Defaults card change an `@AppStorage` setting in the running app at once, relaunching only for keys it read once; the card also filters by key or type and flashes values the app writes. → [docs](docs/features/defaults/README.md#live-or-relaunch) ([#116](https://github.com/tddworks/baguette/pull/116))
@@ -114,7 +118,8 @@ For releases prior to this changelog, see the
 
 [0.1](docs/changelog/0.1.md)
 
-[Unreleased]: https://github.com/tddworks/baguette/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/tddworks/baguette/compare/v0.2.7...HEAD
+[0.2.7]: https://github.com/tddworks/baguette/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/tddworks/baguette/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/tddworks/baguette/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/tddworks/baguette/compare/v0.2.3...v0.2.4
