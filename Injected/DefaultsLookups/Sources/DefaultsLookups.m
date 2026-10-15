@@ -73,6 +73,15 @@ static id SuiteOf(NSUserDefaults *defaults) {
     return objc_getAssociatedObject(defaults, kSuiteKey) ?: NSNull.null;
 }
 
+/// Where this app writes its answer, or nil when it can't answer (no
+/// SIMULATOR_UDID or bundle id). Exported: Injected/build.sh refuses a dylib
+/// with no exported symbols (an empty one once shipped and did nothing), and
+/// everything else here is static.
+__attribute__((visibility("default")))
+NSString *DefaultsLookupsAnswerPath(void) {
+    return gAnswerPath;
+}
+
 static void WriteAnswer(void) {
     os_unfair_lock_lock(&gLock);
     gWriteScheduled = NO;
