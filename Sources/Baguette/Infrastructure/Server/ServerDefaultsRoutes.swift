@@ -116,7 +116,8 @@ extension Server {
         case failed(String)
     }
 
-    /// The whole suite, or one key as present / absent.
+    /// The whole suite — with the keys the running app looks up that nothing
+    /// has stored (`lookups`) — or one key as present / absent.
     static func readDefaults(
         udid: String, query: [String: String], simulators: any Simulators
     ) async -> DefaultsOutcome {
@@ -128,9 +129,12 @@ extension Server {
         }
         guard !udid.isEmpty, let sim = simulators.find(udid: udid) else { return .unknownDevice }
         do {
-            let preferences = try await sim.defaults().read(suite)
-            let json = query["key"].map(preferences.json(forKey:))
-                ?? preferences.json(in: suite, plist: ["1", "true"].contains(query["plist"] ?? ""))
+            let defaults = sim.defaults()
+            let preferences = try await defaults.read(suite)
+            if let key = query["key"] { return .ok(jsonString(preferences.json(forKey: key))) }
+            var json = preferences.json(in: suite, plist: ["1", "true"].contains(query["plist"] ?? ""))
+            json["lookups"] = PreferenceLookups.json(
+                try await defaults.lookups(of: suite.bundleID), unsetIn: preferences, suite: suite)
             return .ok(jsonString(json))
         } catch {
             return outcome(for: error)

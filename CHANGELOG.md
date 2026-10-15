@@ -10,6 +10,12 @@ For releases prior to this changelog, see the
 
 ## [Unreleased]
 
+### Added
+- `baguette defaults read` and the Defaults card now list the settings a running app reads but hasn't stored yet (`@AppStorage` defaults, `register(defaults:)`), typed, so you can set them on a fresh install. → [docs](docs/features/defaults/README.md#workflows)
+
+### Fixed
+- `serve`'s floating panels (Defaults, Status bar, Network, …) no longer slide under the toolbar in a window taller than the device needs.
+
 ---
 
 ## [0.2.6] - 2026-10-13

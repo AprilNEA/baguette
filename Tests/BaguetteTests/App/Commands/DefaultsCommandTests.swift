@@ -88,6 +88,21 @@ struct DefaultsCommandTests {
         """)
     }
 
+    @Test func `should print the settings the running app looks up but nothing stores after the stored ones`() {
+        let preferences = Preferences(values: ["desk": .string("rows")])
+        let unset = [
+            PreferenceLookup(key: "shelf.preview", type: .bool),
+            PreferenceLookup(key: "token", type: nil),
+            PreferenceLookup(key: "volume", type: .float, registered: .real(0.5)),
+        ]
+        #expect(DefaultsCommand.Read.text(preferences, key: nil, unset: unset) == """
+        desk = rows (string)
+        shelf.preview is not set (bool, the app's own default)
+        token is not set (the app's own default)
+        volume is not set (float, registered 0.5)
+        """)
+    }
+
     @Test func `should say a key is not set rather than print a value for it`() {
         #expect(DefaultsCommand.Read.text(Preferences(values: [:]), key: "seen") == "seen is not set")
         #expect(DefaultsCommand.Read.text(Preferences(values: ["seen": .integer(0)]), key: "seen")

@@ -6,9 +6,10 @@
 // own.
 //
 // The card is a dumb sender. It lists apps (`apps.json`) and their groups
-// (`defaults/groups.json`), draws the typed values `defaults.json` reads back,
-// and posts each edit with the type it was read as; Swift validates and
-// stores. Row shaping and request bodies live in
+// (`defaults/groups.json`), draws the typed values `defaults.json` reads back
+// — and, under them, the settings the running app reads that nothing stores
+// (`lookups`) — and posts each edit with the type it was read as; Swift
+// validates and stores. Row shaping and request bodies live in
 // `defaults/preference-rows.js`, where they are unit-tested.
 // See `docs/features/defaults/README.md`.
 
@@ -47,6 +48,8 @@
       this.bundleId = null;
       this.suite = null;
       this.rows = [];
+      this.unset = [];           // settings the running app reads, nothing stores
+      this.answered = false;     // whether a running app said which it reads
       this.open = null;          // key of the expanded plist row
       this.rowErrors = {};       // key → message from a refused value
       this.drafts = {};          // key → the refused text, kept in its field
@@ -102,6 +105,10 @@
           <div class="df-title"><span class="df-count"></span>
             <button class="df-icon" data-act="reload" aria-label="Reload" title="Reload">${ICON_RELOAD}</button></div>
           <div class="df-rows"></div>
+        </div>
+        <div class="df-section df-unset-section" hidden>
+          <div class="df-title"><span class="df-unset-count"></span></div>
+          <div class="df-unset-rows"></div>
         </div>
         <div class="df-section">
           <div class="df-title"><span>Add a key</span></div>
@@ -185,6 +192,7 @@
     _stored(what) {
       if (this.relaunch) {
         this._status(`${what} · relaunched ${this._appName()}`);
+        this._reloadOnceAnswered();
       } else {
         this._status(`${what}. ${this._appName()} may still be using the old value until it restarts.`,
           { warn: true });
@@ -225,6 +233,13 @@
       this._load();
     }
 
+    /** A relaunched app reads its settings as its first screen builds, a
+     *  moment after launch; read again once it has had that moment. */
+    _reloadOnceAnswered() {
+      clearTimeout(this._answerTimer);
+      this._answerTimer = setTimeout(() => { if (this.host) this._load(); }, 1500);
+    }
+
     async _load() {
       const query = this._R.query({ bundleId: this.bundleId, suite: this.suite, plist: true });
       const res = await this._request('GET', `/defaults.json?${query}`);
@@ -236,6 +251,8 @@
       }
       this._clearNotice();
       this.rows = this._R.fromRead(res.json);
+      this.unset = this._R.unsetFromRead(res.json);
+      this.answered = this._R.answered(res.json);
       this._render();
     }
 
@@ -265,13 +282,67 @@
       }
     }
 
+    _unsetControl(row) {
+      const bad = this.rowErrors[row.key];
+      const field = (type) => `<input class="df-value df-mono${type === 'int' || type === 'float' ? ' df-num' : ''}${bad ? ' df-bad' : ''}"
+               data-act="edit-unset" aria-label="${esc(row.key)}"
+               placeholder="${esc(row.placeholder || PLACEHOLDERS[type] || 'value')}"
+               value="${esc(bad ? this.drafts[row.key] : '')}"
+               ${bad ? 'aria-invalid="true"' : ''} spellcheck="false">`;
+      switch (row.control) {
+        case 'switch':
+          return `<button class="df-switch" role="switch" data-act="toggle-unset" aria-checked="${row.checked}"
+                   aria-label="${esc(row.key)}"><span></span></button>`;
+        case 'text':
+          return field(row.type);
+        default:
+          return `<select class="df-field df-mono df-pick-type" aria-label="${esc(row.key)} type">
+                    ${Object.keys(PLACEHOLDERS).map((t) => `<option value="${t}"${t === (row.type || 'string') ? ' selected' : ''}>${t}</option>`).join('')}
+                  </select>${field(row.type || 'string')}`;
+      }
+    }
+
+    /** The settings the running app reads that nothing stores — or, when no
+     *  running app can say, the relaunch that lets it. */
+    _renderUnset() {
+      const section = this._$('.df-unset-section');
+      const title = this._$('.df-unset-count');
+      const list = this._$('.df-unset-rows');
+      if (!this.answered) {
+        section.hidden = false;
+        title.textContent = 'Not set';
+        list.innerHTML = `<div class="df-discover">
+            <span class="df-hint">Settings still on the app's own default are known only to the running app.
+              Relaunch it from here and it can say which it reads.</span>
+            <button class="df-secondary df-sm" data-act="discover">Relaunch ${esc(this._appName())}</button>
+          </div>`;
+        return;
+      }
+      const n = this.unset.length;
+      section.hidden = n === 0;
+      title.textContent = `Not set · ${n} ${n === 1 ? 'key' : 'keys'} the app reads`;
+      list.innerHTML = this.unset.map((row) => `
+        <div class="df-item df-unset" data-key="${esc(row.key)}">
+          <div class="df-item-main${row.control === 'pick' ? ' df-item-pick' : ''}">
+            <span class="df-key df-mono" title="${esc(row.key)}">${esc(row.key)}</span>
+            <span class="df-type df-mono">${esc(row.type || 'any')}</span>
+            <div class="df-control">${this._unsetControl(row)}</div>
+            <span class="df-source" title="${row.source === 'registered'
+              ? 'The fallback the app registered' : "Set in the app's code; only the app knows it"}">${
+              row.source === 'registered' ? 'reg' : 'app'}</span>
+          </div>
+          ${this.rowErrors[row.key] ? `<div class="df-row-error">${esc(this.rowErrors[row.key])}</div>` : ''}
+        </div>`).join('');
+    }
+
     _render() {
+      this._renderUnset();
       const n = this.rows.length;
       this._$('.df-count').textContent = `Stored · ${n} ${n === 1 ? 'key' : 'keys'}`;
       if (!n) {
         this._$('.df-rows').innerHTML = `<div class="df-empty"><b>Nothing stored in this suite</b>
-          <span class="df-hint">Values from register(defaults:) live only in the app's memory, so they
-          don't show here.</span></div>`;
+          <span class="df-hint">An app stores a setting only once it changes. The ones it reads but
+          hasn't stored are under Not set.</span></div>`;
         return;
       }
       this._$('.df-rows').innerHTML = this.rows.map((row) => `
@@ -399,6 +470,19 @@
         case 'replace': this._replaceKey = key; this._$('.df-data-file').click(); break;
         case 'delete': this._delete(key); break;
         case 'reload': this._load(); break;
+        case 'toggle-unset': {
+          const lookup = this.unset.find((r) => r.key === key);
+          this._write(key, 'bool', !lookup.checked);
+          break;
+        }
+        case 'discover':
+          this._request('POST', `/relaunch?${this._R.query({ bundleId: this.bundleId })}`)
+            .then((res) => {
+              if (!res.ok) { this._showNotice(res.status, res.json); return; }
+              this._status(`Relaunched ${this._appName()}`);
+              this._reloadOnceAnswered();
+            });
+          break;
         case 'add': this._add(); break;
         case 'export': this._export(); break;
         case 'import': this._$('.df-import-file').click(); break;
@@ -408,9 +492,11 @@
           break;
         case 'relaunch-now':
           this._request('POST', `/relaunch?${this._R.query({ bundleId: this.bundleId })}`)
-            .then((res) => res.ok
-              ? this._status(`Relaunched ${this._appName()}`)
-              : this._showNotice(res.status, res.json));
+            .then((res) => {
+              if (!res.ok) { this._showNotice(res.status, res.json); return; }
+              this._status(`Relaunched ${this._appName()}`);
+              this._reloadOnceAnswered();
+            });
           break;
         case 'boot':
           this._request('POST', '/boot').then(() => this._loadApps());
@@ -439,6 +525,18 @@
       }
       if (t.matches('.df-new-type')) {
         this._$('.df-new-value').placeholder = PLACEHOLDERS[t.value] || '';
+        return;
+      }
+      if (t.dataset.act === 'edit-unset') {
+        const item = t.closest('.df-item');
+        const lookup = this.unset.find((r) => r.key === item.dataset.key);
+        const picked = item.querySelector('.df-pick-type');
+        if (t.value === '') return;
+        this._write(lookup.key, picked ? picked.value : lookup.type, t.value);
+        return;
+      }
+      if (t.matches('.df-pick-type')) {
+        t.closest('.df-item').querySelector('.df-value').placeholder = PLACEHOLDERS[t.value] || '';
         return;
       }
       if (t.dataset.act === 'edit') {

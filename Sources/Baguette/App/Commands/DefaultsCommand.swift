@@ -44,7 +44,7 @@ struct DefaultsCommand: ParsableCommand {
     struct Read: AsyncParsableCommand {
         static let configuration = CommandConfiguration(
             commandName: "read",
-            abstract: "Print the app's persisted defaults, or one key"
+            abstract: "Print the app's persisted defaults and the settings it looks up but nothing stores, or one key"
         )
 
         @OptionGroup var target: Target
@@ -58,9 +58,12 @@ struct DefaultsCommand: ParsableCommand {
         func run() async throws {
             let preferences: Preferences
             let suite: PreferenceSuite
+            let lookups: PreferenceLookups?
             do {
                 suite = try target.preferenceSuite()
-                preferences = try await target.simulator().defaults().read(suite)
+                let defaults = try target.simulator().defaults()
+                preferences = try await defaults.read(suite)
+                lookups = key == nil ? try await defaults.lookups(of: suite.bundleID) : nil
             } catch let exit as ExitCode {
                 throw exit
             } catch {
@@ -68,10 +71,13 @@ struct DefaultsCommand: ParsableCommand {
                 throw ExitCode.failure
             }
             guard json else {
-                print(Self.text(preferences, key: key))
+                print(Self.text(preferences, key: key, unset: lookups?.unset(in: preferences, suite: suite) ?? []))
                 return
             }
-            let object = key.map(preferences.json(forKey:)) ?? preferences.json(in: suite)
+            var object = key.map(preferences.json(forKey:)) ?? preferences.json(in: suite)
+            if key == nil {
+                object["lookups"] = PreferenceLookups.json(lookups, unsetIn: preferences, suite: suite)
+            }
             let data = try JSONSerialization.data(
                 withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes]
             )
@@ -79,13 +85,21 @@ struct DefaultsCommand: ParsableCommand {
         }
 
         /// One `key = value (type)` line per preference, in key order;
-        /// collections print as their plist fragment.
-        static func text(_ preferences: Preferences, key: String?) -> String {
+        /// collections print as their plist fragment. Then each setting the
+        /// running app looks up that nothing stores, saying where its value
+        /// comes from — a registered fallback, or the app's own code.
+        static func text(_ preferences: Preferences, key: String?, unset: [PreferenceLookup] = []) -> String {
             let keys = key.map { [$0] } ?? preferences.values.keys.sorted()
-            return keys.map { key in
+            let stored = keys.map { key in
                 guard let value = preferences.values[key] else { return "\(key) is not set" }
                 return "\(key) = \(display(value)) (\(value.typeName))"
-            }.joined(separator: "\n")
+            }
+            let notSet = unset.map { lookup -> String in
+                let source = lookup.registered.map { "registered \(display($0))" } ?? "the app's own default"
+                let detail = [lookup.type?.wireName, source].compactMap { $0 }.joined(separator: ", ")
+                return "\(lookup.key) is not set (\(detail))"
+            }
+            return (stored + notSet).joined(separator: "\n")
         }
 
         private static func display(_ value: PreferenceValue) -> String {

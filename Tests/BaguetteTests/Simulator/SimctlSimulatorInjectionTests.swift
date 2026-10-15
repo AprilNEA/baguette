@@ -65,6 +65,20 @@ struct SimctlSimulatorInjectionTests {
                 == false)
     }
 
+    @Test func `should list every library the simulator would load into the next app`() async throws {
+        let fixture = try SimulatorInjectionFixture()
+        defer { fixture.remove() }
+        try fixture.output("\(motion):\(camera)\n")
+        #expect(try await fixture.injection.dylibs(on: fixture.simulator).paths == [motion, camera])
+    }
+
+    @Test func `should list no libraries when launchctl confirms the variable is unset`() async throws {
+        let fixture = try SimulatorInjectionFixture()
+        defer { fixture.remove() }
+        try fixture.output("", status: 1)
+        #expect(try await fixture.injection.dylibs(on: fixture.simulator).isEmpty)
+    }
+
     @Test func `should find a dylib armed when an older build of it is injected`() async throws {
         let fixture = try SimulatorInjectionFixture()
         defer { fixture.remove() }

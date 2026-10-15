@@ -35,11 +35,45 @@
     };
   }
 
+  /** A setting the running app reads that nothing stores. Its value comes
+   *  from a registered fallback (`source: 'registered'`, shown) or from the
+   *  app's own code (`source: 'app'`, which no one outside the app can
+   *  see). An untyped read asks for a type before a value. */
+  function unsetRow(lookup) {
+    const { key } = lookup;
+    const type = lookup.type || null;
+    const registered = lookup.registered;
+    const source = registered ? 'registered' : 'app';
+    if (type === 'bool') {
+      return { key, type, control: 'switch', source, checked: !!registered && registered.value === true };
+    }
+    if (TEXT_TYPES.includes(type)) {
+      return {
+        key, type, control: 'text', source, text: '',
+        placeholder: registered ? String(registered.value) : "app's default",
+      };
+    }
+    return { key, type, control: 'pick', source };
+  }
+
   const PreferenceRows = {
     /** `GET defaults.json?…&plist=1` → rows in key order. */
     fromRead(read) {
       const values = (read && read.values) || {};
       return Object.keys(values).sort().map((key) => row(key, values[key]));
+    },
+
+    /** Whether a running app said which settings it reads — false when it
+     *  wasn't launched by baguette, so the card can offer a relaunch. */
+    answered(read) {
+      return !!(read && read.lookups && read.lookups.answered);
+    },
+
+    /** The settings the running app reads that nothing stores, in the
+     *  order the server sent (key order). */
+    unsetFromRead(read) {
+      if (!PreferenceRows.answered(read)) return [];
+      return (read.lookups.unset || []).map(unsetRow);
     },
 
     /** One value, posted as the type it was read as; arrays and

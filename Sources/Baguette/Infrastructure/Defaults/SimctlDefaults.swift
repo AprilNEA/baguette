@@ -17,15 +17,44 @@ final class SimctlDefaults: Defaults, @unchecked Sendable {
     private let udid: String
     private let subprocess: any Subprocess
     private let xcrun: URL
+    private let answers: URL
+    private let isRunning: @Sendable (Int32) -> Bool
 
+    /// `answers` is where `DefaultsLookups.dylib` leaves each app's answer:
+    /// the host's `/tmp`, which every simulator shares. `isRunning` tells
+    /// whether the app that wrote one is still alive — a simulator's apps
+    /// are ordinary host processes, so `kill(pid, 0)` can see them.
     init(
         udid: String,
         subprocess: any Subprocess = HostSubprocess(),
-        xcrun: URL = URL(fileURLWithPath: "/usr/bin/xcrun")
+        xcrun: URL = URL(fileURLWithPath: "/usr/bin/xcrun"),
+        answers: URL = URL(fileURLWithPath: "/tmp"),
+        isRunning: @escaping @Sendable (Int32) -> Bool = { kill($0, 0) == 0 || errno == EPERM }
     ) {
         self.udid = udid
         self.subprocess = subprocess
         self.xcrun = xcrun
+        self.answers = answers
+        self.isRunning = isRunning
+    }
+
+    /// The answer file for one app on one simulator. Scoped by both, since
+    /// every simulator shares the host's `/tmp`. The dylib builds the same
+    /// name from `SIMULATOR_UDID` and its main bundle's identifier.
+    static func answerFileName(udid: String, bundleID: String) -> String {
+        "BaguetteLookups-\(udid)-\(bundleID).plist"
+    }
+
+    /// The answer is a file the app rewrites whole as it grows, so it is
+    /// the app's *current* answer — but it outlives the app. One whose
+    /// writer has quit is a former run's, and answers nothing.
+    func lookups(of bundleID: String) async throws -> PreferenceLookups? {
+        let file = answers.appendingPathComponent(Self.answerFileName(udid: udid, bundleID: bundleID))
+        guard let data = try? Data(contentsOf: file),
+              let lookups = PreferenceLookups(answer: data),
+              isRunning(lookups.pid)
+        else { return nil }
+        return lookups
     }
 
     func read(_ suite: PreferenceSuite) async throws -> Preferences {

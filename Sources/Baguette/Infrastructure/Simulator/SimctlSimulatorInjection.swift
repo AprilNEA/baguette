@@ -104,6 +104,11 @@ final class SimctlSimulatorInjection: SimulatorInjection, Sendable {
 
     /// Only launchctl's empty status-1 response confirms an unset variable.
     /// Other failures leave the environment unknown and must prevent a write.
+    func dylibs(on simulator: any Simulator) async throws -> InjectedDylibs {
+        let udid = simulator.udid
+        return try await Task.detached { try self.currentDylibs(udid: udid) }.value
+    }
+
     private func currentDylibs(udid: String) throws -> InjectedDylibs {
         do {
             let output = try spawn(udid: udid, arguments: ["getenv", Self.variable])

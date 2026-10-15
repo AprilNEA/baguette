@@ -949,7 +949,7 @@ Read or edit an app's UserDefaults, typed, including App Group suites
 
 ### baguette defaults read
 
-Print the app's persisted defaults, or one key
+Print the app's persisted defaults and the settings it looks up but nothing stores, or one key
 
 ```
 baguette defaults read --udid <udid> --bundle-id <bundle-id> [--suite <suite>] [--key <key>] [--json]

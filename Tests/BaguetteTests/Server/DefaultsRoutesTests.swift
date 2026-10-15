@@ -15,6 +15,7 @@ struct DefaultsRoutesTests {
 
     private func host(
         stored: [String: PreferenceValue] = ["seen": .bool(false)],
+        lookups: PreferenceLookups? = nil,
         failure: DefaultsError? = nil
     ) -> (MockSimulators, Journal) {
         let simulators = MockSimulators()
@@ -46,6 +47,7 @@ struct DefaultsRoutesTests {
             InstalledApp(bundleIdentifier: "com.x.app", name: "Alpha"),
         ])
         given(defaults).groups(of: .any).willReturn(["group.x", "group.y"])
+        given(defaults).lookups(of: .any).willReturn(lookups)
         return (simulators, journal)
     }
 
@@ -56,7 +58,23 @@ struct DefaultsRoutesTests {
         let outcome = await Server.readDefaults(
             udid: "U", query: ["bundleId": "com.x"], simulators: simulators
         )
-        #expect(outcome == .ok(#"{"bundleId":"com.x","values":{"seen":{"type":"bool","value":false}}}"#))
+        #expect(outcome == .ok(
+            #"{"bundleId":"com.x","lookups":{"answered":false},"values":{"seen":{"type":"bool","value":false}}}"#))
+    }
+
+    @Test func `should read the settings the running app looks up that nothing has stored`() async {
+        let (simulators, _) = host(lookups: PreferenceLookups(pid: 9, all: [
+            PreferenceLookup(key: "seen", type: .bool),
+            PreferenceLookup(key: "unveil-ios-glass", type: .string),
+            PreferenceLookup(key: "volume", type: .float, registered: .real(0.5)),
+        ]))
+        let outcome = await Server.readDefaults(
+            udid: "U", query: ["bundleId": "com.x"], simulators: simulators
+        )
+        #expect(outcome == .ok(
+            #"{"bundleId":"com.x","lookups":{"answered":true,"unset":[{"key":"unveil-ios-glass","type":"string"},"#
+            + #"{"key":"volume","registered":{"type":"float","value":0.5},"type":"float"}]},"#
+            + #""values":{"seen":{"type":"bool","value":false}}}"#))
     }
 
     @Test func `should read one key as present or absent`() async {
@@ -235,7 +253,7 @@ struct DefaultsRoutesTests {
         let (simulators, _) = host(stored: ["tags": .array([.bool(true)])])
         #expect(await Server.readDefaults(
             udid: "U", query: ["bundleId": "com.x", "plist": "1"], simulators: simulators
-        ) == .ok(#"{"bundleId":"com.x","values":{"tags":{"plist":"<array><true/></array>","type":"array","value":[{"type":"bool","value":true}]}}}"#))
+        ) == .ok(#"{"bundleId":"com.x","lookups":{"answered":false},"values":{"tags":{"plist":"<array><true/></array>","type":"array","value":[{"type":"bool","value":true}]}}}"#))
     }
 
     @Test func `should relaunch an app on its own`() async {

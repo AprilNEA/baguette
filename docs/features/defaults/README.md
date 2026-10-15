@@ -1,5 +1,5 @@
 ---
-description: Read, write and delete an installed app's persisted UserDefaults on a booted simulator, with every value typed, including App Group suites. Use to set up onboarding, feature-flag or preference scenarios before driving the UI.
+description: Read, write and delete an installed app's UserDefaults on a booted simulator, typed, App Group suites included, plus the settings it reads but hasn't stored. Use to set up onboarding, feature-flag or preference scenarios before driving the UI.
 ---
 
 # Defaults
@@ -52,6 +52,27 @@ baguette defaults import --udid <UDID> --bundle-id com.example.app \
   --file onboarding.json --relaunch            # --file - reads stdin
 ```
 
+**Change a setting nobody has stored yet.** An app stores a setting only once
+it changes, so a fresh install's `@AppStorage("theme") var theme = .system`
+has nothing on disk to edit. The running app knows the key, though, at the
+moment it reads it. Every app baguette launches (`--relaunch`, the card's
+relaunch) can say which preferences it has looked up, and `read` lists those
+nothing stores after the stored ones:
+
+```
+$ baguette defaults read --udid <UDID> --bundle-id com.onegai.unveil
+desk = board (string)
+shelf.preview is not set (bool, the app's own default)
+unveil-ios-appearance is not set (string, the app's own default)
+```
+
+Write one like any other key. The type is the one the app's getter asked for
+(`bool(forKey:)` → `bool`, `@AppStorage` of a `String` enum → `string`); a
+key read only untyped (`object(forKey:)`) has none, so pick one. In the card
+these are the **Not set** rows, each marked `app` (its value is in the app's
+code, which no one outside the app can see) or `reg` (a `register(defaults:)`
+fallback, shown).
+
 **Check a key, not just a value.** `read --key k --json` answers
 `{"key":"k","present":false}` for a key that was never stored and
 `{"key":"k","present":true,"type":"bool","value":false}` for a stored `false`.
@@ -76,7 +97,9 @@ can't tell `1` from `1.0`.
 
 ```
 GET    /simulators/<UDID>/defaults.json?bundleId=com.x[&suite=group.x][&key=k]
-       → {"bundleId":"com.x","values":{"seen":{"type":"bool","value":false}}}
+       → {"bundleId":"com.x","values":{"seen":{"type":"bool","value":false}},
+          "lookups":{"answered":true,"unset":[{"key":"theme","type":"string"},
+                                              {"key":"volume","type":"float","registered":{"type":"float","value":0.5}}]}}
        → {"key":"k","present":false}                    (with &key=)
 POST   /simulators/<UDID>/defaults
        {"bundleId":"com.x","suite":"group.x"?,"key":"seen","type":"bool","value":false,"relaunch":true?}
@@ -97,7 +120,9 @@ POST   /simulators/<UDID>/relaunch?bundleId=com.x            → {"ok":true}
 ```
 
 `defaults.json?…&plist=1` adds each array or dictionary's `"plist"` text, so
-an editor can show it and post it back as `type: plist`.
+an editor can show it and post it back as `type: plist`. `lookups` is
+`{"answered":false}` when no running app can say what it reads: it isn't
+running, or something other than baguette launched it.
 
 `value` may be a JSON string, number or boolean; it is read as `type`. Errors
 are `{"ok":false,"error":"…"}`: `400` bad identifier / type / value, `404`
@@ -120,13 +145,21 @@ capability reaches these routes.
   and a group the app's entitlements don't grant is an error, never a silent
   fallback to standard defaults. `UserDefaults(suiteName: "com.x.debug")` lives
   in the app's data container as `com.x.debug.plist`.
-- **Persisted values only.** `register(defaults:)` values live in the app's
-  memory and never appear here, and neither do managed preferences, the
-  Keychain or app databases.
+- **Not set lists only what the app has read so far, in this run.** A key read
+  on a screen you haven't opened appears once you open it and reload. A
+  relaunch starts the list again from the app's first reads.
+- **An app launched some other way (Xcode, the home screen) can't say what it
+  reads.** Relaunch it from baguette. Only that one launch loads the library
+  that listens; nothing is armed device-wide, and the camera / motion /
+  network libraries already armed load alongside it.
+- **An unset `@AppStorage` value can't be shown.** Its default (`= .system`)
+  exists only in Swift. A `register(defaults:)` fallback can, and is.
+- **Managed preferences, the Keychain and app databases are out of scope.**
 
 ## See also
 
-- [design.md](design.md): the simctl path, measured exit codes, and why the
-  group lookup lists every group
+- [design.md](design.md): the simctl path, measured exit codes, why the
+  group lookup lists every group, and how an app says which preferences it
+  looks up
 - [mockup.html](mockup.html): the card's design mockup, with its empty, suite, error and relaunch-off states
 - [deep-links](../deep-links/README.md): drive the app to a screen after setup

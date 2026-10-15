@@ -117,3 +117,44 @@ test('a failure reads as a card-level notice by its HTTP status', () => {
     { tone: 'warn', text: 'com.x has no App Group group.y', action: null });
   assert.deepEqual(R.notice(500, ''), { tone: 'danger', text: 'Request failed (500)', action: null });
 });
+
+test('a setting the running app reads but nothing stores becomes a row that says where its value comes from', () => {
+  const rows = Rows().unsetFromRead({
+    values: {},
+    lookups: {
+      answered: true,
+      unset: [
+        { key: 'shelf.preview', type: 'bool' },
+        { key: 'unveil-ios-glass', type: 'string' },
+        { key: 'volume', type: 'float', registered: { type: 'float', value: 0.5 } },
+        { key: 'onboarded', type: 'bool', registered: { type: 'bool', value: true } },
+      ],
+    },
+  });
+  assert.deepEqual(rows.map((r) => [r.key, r.type, r.control, r.source]), [
+    ['shelf.preview', 'bool', 'switch', 'app'],
+    ['unveil-ios-glass', 'string', 'text', 'app'],
+    ['volume', 'float', 'text', 'registered'],
+    ['onboarded', 'bool', 'switch', 'registered'],
+  ]);
+  assert.equal(rows[0].checked, false);
+  assert.equal(rows[1].text, '');
+  assert.equal(rows[1].placeholder, "app's default");
+  assert.equal(rows[2].placeholder, '0.5');
+  assert.equal(rows[3].checked, true);
+});
+
+test('a setting the app only read untyped asks for its type before a value', () => {
+  const [token, recent] = Rows().unsetFromRead({
+    lookups: { answered: true, unset: [{ key: 'token' }, { key: 'recent', type: 'plist' }] },
+  });
+  assert.deepEqual([token.control, token.type], ['pick', null]);
+  assert.deepEqual([recent.control, recent.type], ['pick', 'plist']);
+});
+
+test('a read tells whether the running app answered which settings it reads', () => {
+  assert.equal(Rows().answered({ lookups: { answered: true, unset: [] } }), true);
+  assert.equal(Rows().answered({ lookups: { answered: false } }), false);
+  assert.equal(Rows().answered({ values: {} }), false);
+  assert.deepEqual(Rows().unsetFromRead({ lookups: { answered: false } }), []);
+});
