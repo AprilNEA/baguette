@@ -182,6 +182,12 @@
      what it did at the narrowest widths. */
   #simNativeView {
     --nv-vh: 1vh;
+    /* Where the floating panels start. The toolbar sits in the device's
+       vertically centred column, so in a window taller than the device
+       needs it lands well below the top — `placeFloatingPanels` in
+       sim-native.js moves this under it. 84px is the toolbar-at-top
+       resting place, and the floor. */
+    --nv-panel-top: 84px;
     --nv-device-max-w:    min(100%, 96vw);
     --nv-device-max-h:    calc(100 * var(--nv-vh) - 68px);
     --nv-companion-max-w: min(100%, 720px, 88vw);
@@ -356,7 +362,8 @@
        a level of its own the bar sits at 0, which puts the popover
        under the floating cards (z-index 40) and under the device
        wrapper once `applyOrientation` gives it a transform. 50 clears
-       both; the bar and the cards never overlap geometrically. */
+       both; the cards start below the bar (`--nv-panel-top`), so the
+       two never overlap geometrically. */
     position: relative;
     z-index: 50;
   }
@@ -1106,7 +1113,7 @@
      exact area. */
   #simNativeView .camera-host {
     position: absolute;
-    top: 84px;
+    top: var(--nv-panel-top);
     left: 24px;
     z-index: 40;
     width: 260px;
@@ -1162,11 +1169,11 @@
      .sb-pill …) can't leak into the rest of the focus chrome. */
   #simNativeView .status-bar-host {
     position: absolute;
-    top: 84px;
+    top: var(--nv-panel-top);
     right: 24px;
     z-index: 40;
     width: 332px;
-    max-height: calc(100dvh - 120px);
+    max-height: calc(100dvh - var(--nv-panel-top) - 36px);
     display: flex; flex-direction: column;
     background: var(--nv-bar-bg);
     border: 1px solid var(--nv-bar-border);
@@ -1205,11 +1212,11 @@
      can't leak into the rest of the focus chrome. */
   #simNativeView .network-host {
     position: absolute;
-    top: 84px;
+    top: var(--nv-panel-top);
     right: 24px;
     z-index: 40;
     width: 332px;
-    max-height: calc(100dvh - 120px);
+    max-height: calc(100dvh - var(--nv-panel-top) - 36px);
     display: flex; flex-direction: column;
     background: var(--nv-bar-bg);
     border: 1px solid var(--nv-bar-border);
@@ -1247,11 +1254,11 @@
      styles are scoped under `.defaults-host` (.df-*). */
   #simNativeView .defaults-host {
     position: absolute;
-    top: 84px;
+    top: var(--nv-panel-top);
     right: 24px;
     z-index: 40;
     width: 384px;
-    max-height: calc(100dvh - 120px);
+    max-height: calc(100dvh - var(--nv-panel-top) - 36px);
     display: flex; flex-direction: column;
     background: var(--nv-bar-bg);
     border: 1px solid var(--nv-bar-border);
@@ -1502,11 +1509,11 @@
      flips `[data-location="open"]`. */
   #simNativeView .location-host {
     position: absolute;
-    top: 84px;
+    top: var(--nv-panel-top);
     right: 24px;
     z-index: 40;
     width: 360px;
-    max-height: calc(100dvh - 120px);
+    max-height: calc(100dvh - var(--nv-panel-top) - 36px);
     display: flex; flex-direction: column;
     background: var(--nv-bar-bg);
     border: 1px solid var(--nv-bar-border);
@@ -2103,7 +2110,7 @@
      surfaces a selection — never the toggle itself). */
   #simNativeView .ax-host {
     position: absolute;
-    top: 84px;
+    top: var(--nv-panel-top);
     right: 24px;
     z-index: 40;
     width: 240px;
@@ -2295,20 +2302,20 @@
   }
 
   /* The open plugin panel. Anchored like the other floating panels
-     (`top: 84px`, the same height budget) but inset from the right far
+     (`top: var(--nv-panel-top)`, the same height budget) but inset from the right far
      enough to clear the rails it opens from, rather than the 24px the
      panels that have no rail beside them use. */
   #simNativeView .plugin-host {
     position: fixed;
-    top: 84px;
+    top: var(--nv-panel-top);
     right: 76px;
     z-index: 40;
     width: 340px;
-    max-height: calc(100dvh - 120px);
+    max-height: calc(100dvh - var(--nv-panel-top) - 36px);
   }
   #simNativeView .plugin-card {
     display: flex; flex-direction: column;
-    max-height: calc(100dvh - 120px);
+    max-height: calc(100dvh - var(--nv-panel-top) - 36px);
     background: var(--nv-bar-bg);
     border: 1px solid var(--nv-bar-border);
     border-radius: 14px;

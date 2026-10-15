@@ -2176,6 +2176,34 @@
     }
   }
 
+  /**
+   * Start the floating panels (status bar, network, defaults, …) below
+   * the toolbar wherever it actually is.
+   *
+   * The toolbar rides the device's vertically centred column, so a
+   * window taller than the device needs pushes it down past the panels'
+   * old fixed `top: 84px` and the bar covered each panel's first row.
+   * Watching the view as well as the bar catches a window resize that
+   * re-centres the column without changing the bar's own size.
+   */
+  function placeFloatingPanels() {
+    const view = document.getElementById('simNativeView');
+    const bar = document.querySelector('#simNativeView .top-bar');
+    if (!view || !bar || typeof ResizeObserver === 'undefined') return;
+    const place = () => {
+      const below = Math.round(bar.getBoundingClientRect().bottom) + 24;
+      view.style.setProperty('--nv-panel-top', Math.max(84, below) + 'px');
+    };
+    const observer = new ResizeObserver(place);
+    observer.observe(view);
+    observer.observe(bar);
+    // The device frame settling (bezel image, rotation) moves the bar
+    // without resizing either element.
+    const frame = document.getElementById('nativeDeviceFrame');
+    if (frame) observer.observe(frame);
+    place();
+  }
+
   function wireToolbarScroll() {
     if (!buildToolbarClusters()) return;
     applyDeviceModeChrome();
@@ -2210,6 +2238,7 @@
 
     refreshToolbarScroll = layoutToolbar;
     window.addEventListener('resize', layoutToolbar);
+    placeFloatingPanels();
     // Re-measure once layout settles (fonts, device frame, format pills).
     requestAnimationFrame(layoutToolbar);
     setTimeout(layoutToolbar, 400);
