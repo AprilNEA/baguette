@@ -15,6 +15,7 @@ struct DefaultsRoutesTests {
 
     private func host(
         stored: [String: PreferenceValue] = ["seen": .bool(false)],
+        lookups: PreferenceLookups? = nil,
         failure: DefaultsError? = nil
     ) -> (MockSimulators, Journal) {
         let simulators = MockSimulators()
@@ -46,6 +47,7 @@ struct DefaultsRoutesTests {
             InstalledApp(bundleIdentifier: "com.x.app", name: "Alpha"),
         ])
         given(defaults).groups(of: .any).willReturn(["group.x", "group.y"])
+        given(defaults).lookups(of: .any).willReturn(lookups)
         return (simulators, journal)
     }
 
@@ -56,7 +58,23 @@ struct DefaultsRoutesTests {
         let outcome = await Server.readDefaults(
             udid: "U", query: ["bundleId": "com.x"], simulators: simulators
         )
-        #expect(outcome == .ok(#"{"bundleId":"com.x","values":{"seen":{"type":"bool","value":false}}}"#))
+        #expect(outcome == .ok(
+            #"{"bundleId":"com.x","lookups":{"answered":false},"values":{"seen":{"type":"bool","value":false}}}"#))
+    }
+
+    @Test func `should read the settings the running app looks up that nothing has stored`() async {
+        let (simulators, _) = host(lookups: PreferenceLookups(pid: 9, all: [
+            PreferenceLookup(key: "seen", type: .bool),
+            PreferenceLookup(key: "unveil-ios-glass", type: .string),
+            PreferenceLookup(key: "volume", type: .float, registered: .real(0.5)),
+        ]))
+        let outcome = await Server.readDefaults(
+            udid: "U", query: ["bundleId": "com.x"], simulators: simulators
+        )
+        #expect(outcome == .ok(
+            #"{"bundleId":"com.x","lookups":{"answered":true,"live":[],"unset":[{"key":"unveil-ios-glass","type":"string"},"#
+            + #"{"key":"volume","registered":{"type":"float","value":0.5},"type":"float"}]},"#
+            + #""values":{"seen":{"type":"bool","value":false}}}"#))
     }
 
     @Test func `should read one key as present or absent`() async {
@@ -109,7 +127,7 @@ struct DefaultsRoutesTests {
             body: #"{"bundleId":"com.x","suite":"group.x","key":"n","type":"int","value":3}"#,
             simulators: simulators
         )
-        #expect(outcome == .ok(#"{"ok":true}"#))
+        #expect(outcome == .ok(#"{"ok":true,"relaunched":false}"#))
         #expect(journal.steps == ["write group.x n=<integer>3</integer>"])
     }
 
@@ -130,6 +148,41 @@ struct DefaultsRoutesTests {
             simulators: simulators
         )
         #expect(journal.steps == ["terminate com.x", "write com.x s=<string>hi</string>", "launch com.x"])
+    }
+
+    @Test func `should change a setting the running app watches without relaunching it when the body asks to relaunch only as needed`() async {
+        let (simulators, journal) = host(lookups: PreferenceLookups(pid: 9, all: [
+            PreferenceLookup(key: "theme", type: .string, live: true),
+        ]))
+        let outcome = await Server.writeDefaults(
+            udid: "U",
+            body: #"{"bundleId":"com.x","key":"theme","type":"string","value":"Light","relaunch":"whenNeeded"}"#,
+            simulators: simulators
+        )
+        #expect(outcome == .ok(#"{"ok":true,"relaunched":false}"#))
+        #expect(journal.steps == ["write com.x theme=<string>Light</string>"])
+    }
+
+    @Test func `should relaunch around a setting the running app read only once when the body asks to relaunch only as needed`() async {
+        let (simulators, journal) = host(lookups: PreferenceLookups(pid: 9, all: [
+            PreferenceLookup(key: "desk", type: .string),
+        ]))
+        let outcome = await Server.writeDefaults(
+            udid: "U",
+            body: #"{"bundleId":"com.x","key":"desk","type":"string","value":"board","relaunch":"whenNeeded"}"#,
+            simulators: simulators
+        )
+        #expect(outcome == .ok(#"{"ok":true,"relaunched":true}"#))
+        #expect(journal.steps == ["terminate com.x", "write com.x desk=<string>board</string>", "launch com.x"])
+    }
+
+    @Test func `should refuse a relaunch that is not always, never or as needed`() async {
+        let (simulators, journal) = host()
+        #expect(await Server.writeDefaults(
+            udid: "U", body: #"{"bundleId":"com.x","key":"k","type":"bool","value":true,"relaunch":"sometimes"}"#,
+            simulators: simulators
+        ) == .badRequest(#"relaunch must be true, false or "whenNeeded""#))
+        #expect(journal.steps.isEmpty)
     }
 
     @Test func `should refuse a write body that is not a typed preference`() async {
@@ -159,10 +212,10 @@ struct DefaultsRoutesTests {
         let (simulators, journal) = host()
         #expect(await Server.deleteDefaults(
             udid: "U", query: ["bundleId": "com.x", "key": "seen"], simulators: simulators
-        ) == .ok(#"{"ok":true,"removed":true}"#))
+        ) == .ok(#"{"ok":true,"relaunched":false,"removed":true}"#))
         #expect(await Server.deleteDefaults(
             udid: "U", query: ["bundleId": "com.x", "key": "gone", "relaunch": "1"], simulators: simulators
-        ) == .ok(#"{"ok":true,"removed":false}"#))
+        ) == .ok(#"{"ok":true,"relaunched":true,"removed":false}"#))
         #expect(journal.steps == ["delete seen", "terminate com.x", "launch com.x"])
     }
 
@@ -194,7 +247,7 @@ struct DefaultsRoutesTests {
             body: #"{"bundleId":"com.x","relaunch":true,"values":{"b":{"type":"int","value":2},"a":{"type":"bool","value":true}}}"#,
             simulators: simulators
         )
-        #expect(outcome == .ok(#"{"ok":true,"written":2}"#))
+        #expect(outcome == .ok(#"{"ok":true,"relaunched":true,"written":2}"#))
         #expect(journal.steps == [
             "terminate com.x", "write com.x a=<true/>", "write com.x b=<integer>2</integer>", "launch com.x",
         ])
@@ -235,7 +288,7 @@ struct DefaultsRoutesTests {
         let (simulators, _) = host(stored: ["tags": .array([.bool(true)])])
         #expect(await Server.readDefaults(
             udid: "U", query: ["bundleId": "com.x", "plist": "1"], simulators: simulators
-        ) == .ok(#"{"bundleId":"com.x","values":{"tags":{"plist":"<array><true/></array>","type":"array","value":[{"type":"bool","value":true}]}}}"#))
+        ) == .ok(#"{"bundleId":"com.x","lookups":{"answered":false},"values":{"tags":{"plist":"<array><true/></array>","type":"array","value":[{"type":"bool","value":true}]}}}"#))
     }
 
     @Test func `should relaunch an app on its own`() async {

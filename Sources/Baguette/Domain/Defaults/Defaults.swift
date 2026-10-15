@@ -31,6 +31,13 @@ protocol Defaults: Sendable {
     /// The App Group identifiers the app has, sorted — the suites an
     /// editor can offer beside the app's standard defaults.
     func groups(of bundleID: String) async throws -> [String]
+
+    /// The preferences the app, as it runs now, has looked up — its own
+    /// code's reads and SwiftUI's `@AppStorage`, each typed. `nil` when no
+    /// running app can answer: it isn't running, or it wasn't launched
+    /// through baguette (only that launch carries
+    /// `DefaultsLookups.dylib`, which listens).
+    func lookups(of bundleID: String) async throws -> PreferenceLookups?
 }
 
 /// Why a defaults operation failed, each with the step the user can take.

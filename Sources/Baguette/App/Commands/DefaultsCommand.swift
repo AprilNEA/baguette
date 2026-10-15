@@ -44,7 +44,7 @@ struct DefaultsCommand: ParsableCommand {
     struct Read: AsyncParsableCommand {
         static let configuration = CommandConfiguration(
             commandName: "read",
-            abstract: "Print the app's persisted defaults, or one key"
+            abstract: "Print the app's persisted defaults and the settings it looks up but nothing stores, or one key"
         )
 
         @OptionGroup var target: Target
@@ -58,9 +58,12 @@ struct DefaultsCommand: ParsableCommand {
         func run() async throws {
             let preferences: Preferences
             let suite: PreferenceSuite
+            let lookups: PreferenceLookups?
             do {
                 suite = try target.preferenceSuite()
-                preferences = try await target.simulator().defaults().read(suite)
+                let defaults = try target.simulator().defaults()
+                preferences = try await defaults.read(suite)
+                lookups = key == nil ? try await defaults.lookups(of: suite.bundleID) : nil
             } catch let exit as ExitCode {
                 throw exit
             } catch {
@@ -68,10 +71,13 @@ struct DefaultsCommand: ParsableCommand {
                 throw ExitCode.failure
             }
             guard json else {
-                print(Self.text(preferences, key: key))
+                print(Self.text(preferences, key: key, unset: lookups?.unset(in: preferences, suite: suite) ?? []))
                 return
             }
-            let object = key.map(preferences.json(forKey:)) ?? preferences.json(in: suite)
+            var object = key.map(preferences.json(forKey:)) ?? preferences.json(in: suite)
+            if key == nil {
+                object["lookups"] = PreferenceLookups.json(lookups, unsetIn: preferences, suite: suite)
+            }
             let data = try JSONSerialization.data(
                 withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes]
             )
@@ -79,13 +85,21 @@ struct DefaultsCommand: ParsableCommand {
         }
 
         /// One `key = value (type)` line per preference, in key order;
-        /// collections print as their plist fragment.
-        static func text(_ preferences: Preferences, key: String?) -> String {
+        /// collections print as their plist fragment. Then each setting the
+        /// running app looks up that nothing stores, saying where its value
+        /// comes from — a registered fallback, or the app's own code.
+        static func text(_ preferences: Preferences, key: String?, unset: [PreferenceLookup] = []) -> String {
             let keys = key.map { [$0] } ?? preferences.values.keys.sorted()
-            return keys.map { key in
+            let stored = keys.map { key in
                 guard let value = preferences.values[key] else { return "\(key) is not set" }
                 return "\(key) = \(display(value)) (\(value.typeName))"
-            }.joined(separator: "\n")
+            }
+            let notSet = unset.map { lookup -> String in
+                let source = lookup.registered.map { "registered \(display($0))" } ?? "the app's own default"
+                let detail = [lookup.type?.wireName, source].compactMap { $0 }.joined(separator: ", ")
+                return "\(lookup.key) is not set (\(detail))"
+            }
+            return (stored + notSet).joined(separator: "\n")
         }
 
         private static func display(_ value: PreferenceValue) -> String {
@@ -101,7 +115,32 @@ struct DefaultsCommand: ParsableCommand {
         }
     }
 
-    /// `baguette defaults write … --key <k> --type <type> --value <v> [--relaunch]`
+    /// How an edit treats the running app: `--relaunch` always quits it
+    /// first and launches it after; `--relaunch-if-needed` does that only
+    /// for a key the running app doesn't watch (an `@AppStorage` key
+    /// updates in place). Neither leaves the app alone.
+    struct RelaunchOption: ParsableArguments {
+        @Flag(help: "Quit the app before the change and launch it after, so it starts from the new value")
+        var relaunch = false
+
+        @Flag(help: "Relaunch only if the running app wouldn't see the change: it read the key once rather than watching it")
+        var relaunchIfNeeded = false
+
+        func validate() throws {
+            if relaunch && relaunchIfNeeded {
+                throw ValidationError("pass --relaunch or --relaunch-if-needed, not both")
+            }
+        }
+
+        var choice: Relaunch { relaunchIfNeeded ? .whenNeeded : relaunch ? .always : .never }
+
+        /// What the log line adds after the change.
+        static func said(_ relaunched: Bool, bundleID: String) -> String {
+            relaunched ? " and relaunched \(bundleID)" : ""
+        }
+    }
+
+    /// `baguette defaults write … --key <k> --type <type> --value <v> [--relaunch | --relaunch-if-needed]`
     struct Write: AsyncParsableCommand {
         static let configuration = CommandConfiguration(
             commandName: "write",
@@ -122,22 +161,22 @@ struct DefaultsCommand: ParsableCommand {
         @Option(help: "The value, e.g. false, 3, 1.5, 2026-01-02T03:04:05Z, base64 data, or <array>…</array>")
         var value: String
 
-        @Flag(help: "Quit the app before writing and launch it after, so it starts from the new value")
-        var relaunch = false
+        @OptionGroup var relaunch: RelaunchOption
 
         func edit() throws -> PreferenceEdit {
             PreferenceEdit(
                 suite: try target.preferenceSuite(),
                 key: key,
                 change: .set(try PreferenceValue.parse(type: type, value: value)),
-                relaunch: relaunch
+                relaunch: relaunch.choice
             )
         }
 
         func run() async throws {
+            let applied: PreferenceEdit.Applied
             do {
                 let simulator = try target.simulator()
-                _ = try await edit().apply(on: simulator.defaults(), apps: simulator.apps())
+                applied = try await edit().apply(on: simulator.defaults(), apps: simulator.apps())
             } catch let exit as ExitCode {
                 throw exit
             } catch {
@@ -145,11 +184,11 @@ struct DefaultsCommand: ParsableCommand {
                 throw ExitCode.failure
             }
             log("Wrote \(key) for \(target.suite ?? target.bundleID)"
-                + (relaunch ? " and relaunched \(target.bundleID)" : ""))
+                + RelaunchOption.said(applied.relaunched, bundleID: target.bundleID))
         }
     }
 
-    /// `baguette defaults delete … --key <k> [--relaunch]`
+    /// `baguette defaults delete … --key <k> [--relaunch | --relaunch-if-needed]`
     struct Delete: AsyncParsableCommand {
         static let configuration = CommandConfiguration(
             commandName: "delete",
@@ -161,25 +200,25 @@ struct DefaultsCommand: ParsableCommand {
         @Option(help: "The key to remove")
         var key: String
 
-        @Flag(help: "Quit the app before removing and launch it after")
-        var relaunch = false
+        @OptionGroup var relaunch: RelaunchOption
 
         func edit() throws -> PreferenceEdit {
-            PreferenceEdit(suite: try target.preferenceSuite(), key: key, change: .remove, relaunch: relaunch)
+            PreferenceEdit(suite: try target.preferenceSuite(), key: key, change: .remove, relaunch: relaunch.choice)
         }
 
         func run() async throws {
-            let removed: Bool
+            let applied: PreferenceEdit.Applied
             do {
                 let simulator = try target.simulator()
-                removed = try await edit().apply(on: simulator.defaults(), apps: simulator.apps())
+                applied = try await edit().apply(on: simulator.defaults(), apps: simulator.apps())
             } catch let exit as ExitCode {
                 throw exit
             } catch {
                 log("defaults delete failed: \(error)")
                 throw ExitCode.failure
             }
-            log(removed ? "Removed \(key)" : "\(key) was not set; nothing removed")
+            log((applied.changed ? "Removed \(key)" : "\(key) was not set; nothing removed")
+                + RelaunchOption.said(applied.relaunched, bundleID: target.bundleID))
         }
     }
 
@@ -217,7 +256,7 @@ struct DefaultsCommand: ParsableCommand {
         }
     }
 
-    /// `baguette defaults import … --file prefs.json [--relaunch]`
+    /// `baguette defaults import … --file prefs.json [--relaunch | --relaunch-if-needed]`
     struct Import: AsyncParsableCommand {
         static let configuration = CommandConfiguration(
             commandName: "import",
@@ -229,8 +268,7 @@ struct DefaultsCommand: ParsableCommand {
         @Option(help: "A `defaults export` file, or a JSON map of typed values; - reads stdin")
         var file: String
 
-        @Flag(help: "Quit the app before the import and launch it once after")
-        var relaunch = false
+        @OptionGroup var relaunch: RelaunchOption
 
         /// The file's values, written into the suite named on the command
         /// line — not the one the export came from, so a set saved from one
@@ -239,27 +277,28 @@ struct DefaultsCommand: ParsableCommand {
             PreferenceImport(
                 suite: try target.preferenceSuite(),
                 preferences: try Preferences(importing: data),
-                relaunch: relaunch
+                relaunch: relaunch.choice
             )
         }
 
         func run() async throws {
-            let written: Int
+            let applied: PreferenceImport.Applied
             do {
                 let data = file == "-"
                     ? FileHandle.standardInput.readDataToEndOfFile()
                     : try Data(contentsOf: URL(fileURLWithPath: file))
                 let restore = try preferenceImport(from: data)
                 let simulator = try target.simulator()
-                written = try await restore.apply(on: simulator.defaults(), apps: simulator.apps())
+                applied = try await restore.apply(on: simulator.defaults(), apps: simulator.apps())
             } catch let exit as ExitCode {
                 throw exit
             } catch {
                 log("defaults import failed: \(error)")
                 throw ExitCode.failure
             }
+            let written = applied.written
             log("Imported \(written) value\(written == 1 ? "" : "s") into \(target.suite ?? target.bundleID)"
-                + (relaunch ? " and relaunched \(target.bundleID)" : ""))
+                + RelaunchOption.said(applied.relaunched, bundleID: target.bundleID))
         }
     }
 }

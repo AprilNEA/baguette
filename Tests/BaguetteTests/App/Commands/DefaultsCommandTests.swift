@@ -44,7 +44,23 @@ struct DefaultsCommandTests {
             "--udid", "U", "--bundle-id", "com.x", "--key", "n", "--type", "int", "--value", "3",
             "--relaunch",
         ])
-        #expect(try cmd.edit().relaunch)
+        #expect(try cmd.edit().relaunch == .always)
+    }
+
+    @Test func `should relaunch around a write only when the running app needs it when asked to`() throws {
+        let cmd = try DefaultsCommand.Write.parse([
+            "--udid", "U", "--bundle-id", "com.x", "--key", "n", "--type", "int", "--value", "3",
+            "--relaunch-if-needed",
+        ])
+        #expect(try cmd.edit().relaunch == .whenNeeded)
+    }
+
+    @Test func `should refuse to relaunch both always and only when needed`() {
+        #expect(throws: (any Error).self) {
+            try DefaultsCommand.Delete.parse([
+                "--udid", "U", "--bundle-id", "com.x", "--key", "n", "--relaunch", "--relaunch-if-needed",
+            ])
+        }
     }
 
     @Test func `should refuse a write whose value is not of its type`() throws {
@@ -88,6 +104,21 @@ struct DefaultsCommandTests {
         """)
     }
 
+    @Test func `should print the settings the running app looks up but nothing stores after the stored ones`() {
+        let preferences = Preferences(values: ["desk": .string("rows")])
+        let unset = [
+            PreferenceLookup(key: "shelf.preview", type: .bool),
+            PreferenceLookup(key: "token", type: nil),
+            PreferenceLookup(key: "volume", type: .float, registered: .real(0.5)),
+        ]
+        #expect(DefaultsCommand.Read.text(preferences, key: nil, unset: unset) == """
+        desk = rows (string)
+        shelf.preview is not set (bool, the app's own default)
+        token is not set (the app's own default)
+        volume is not set (float, registered 0.5)
+        """)
+    }
+
     @Test func `should say a key is not set rather than print a value for it`() {
         #expect(DefaultsCommand.Read.text(Preferences(values: [:]), key: "seen") == "seen is not set")
         #expect(DefaultsCommand.Read.text(Preferences(values: ["seen": .integer(0)]), key: "seen")
@@ -124,7 +155,7 @@ struct DefaultsCommandTests {
         #expect(restore == PreferenceImport(
             suite: try PreferenceSuite(bundleID: "com.y"),
             preferences: Preferences(values: ["seen": .bool(false)]),
-            relaunch: true
+            relaunch: .always
         ))
     }
 }

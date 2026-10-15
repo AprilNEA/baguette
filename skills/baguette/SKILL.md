@@ -238,8 +238,12 @@ Wired (use freely):
   `{"type":…,"value":…}` and `present:false` for an absent key;
   `export [--key k …]` / `import --file f.json` save and restore a
   set of keys for repeatable setup. **A
-  running app may not see a write**: pass `--relaunch` (quit → write →
-  launch). HTTP: `GET /simulators/<X>/defaults.json`, `POST|DELETE
+  running app may not see a write** to a key it read once: pass
+  `--relaunch-if-needed` (an `@AppStorage` key changes live, anything
+  else is quit → write → launch) or `--relaunch` to always relaunch. An app baguette launched also says which settings it reads
+  but hasn't stored (`@AppStorage` keys on a fresh install): `read`
+  lists them as `… is not set (type, …)` and `--json` / HTTP as
+  `lookups.unset`; write them like any key. HTTP: `GET /simulators/<X>/defaults.json`, `POST|DELETE
   /simulators/<X>/defaults`. See
   [`docs/features/defaults/README.md`](../../docs/features/defaults/README.md).
 - `logs` — stream the booted simulator's unified log line-by-line

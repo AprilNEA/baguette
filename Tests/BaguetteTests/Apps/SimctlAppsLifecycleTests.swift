@@ -9,19 +9,23 @@ import Mockable
 struct SimctlAppsLifecycleTests {
 
     final class Captures: @unchecked Sendable {
+        var executable: URL?
         var arguments: [String]?
     }
 
-    private func makeApps(exitCode: Int32 = 0) -> (SimctlApps, Captures) {
+    private func makeApps(
+        exitCode: Int32 = 0, libraries: InjectedDylibs = InjectedDylibs(paths: [])
+    ) -> (SimctlApps, Captures) {
         let sub = MockSubprocess()
         let captures = Captures()
         given(sub).run(
             executable: .any, arguments: .any, onBytes: .any, onExit: .any
-        ).willProduce { _, args, _, onExit in
+        ).willProduce { executable, args, _, onExit in
+            captures.executable = executable
             captures.arguments = args
             onExit(exitCode)
         }
-        return (SimctlApps(udid: "U", subprocess: sub), captures)
+        return (SimctlApps(udid: "U", subprocess: sub, libraries: { libraries }), captures)
     }
 
     @Test func `should quit a running app through simctl terminate`() async throws {
@@ -47,6 +51,21 @@ struct SimctlAppsLifecycleTests {
         let (apps, captures) = makeApps()
         try await apps.launch(bundleID: "com.example.app")
         #expect(captures.arguments == ["simctl", "launch", "U", "com.example.app"])
+    }
+
+    @Test func `should launch an app able to answer its preference lookups while keeping the libraries already armed`() async throws {
+        // simctl hands a launched app SIMCTL_CHILD_* in place of the
+        // device-wide DYLD_INSERT_LIBRARIES (measured, Xcode 27), so the
+        // launch must carry the armed camera / motion / network too.
+        let (apps, captures) = makeApps(libraries: InjectedDylibs(paths: [
+            "/s/builds/a/VirtualMotion.dylib", "/s/builds/a/DefaultsLookups.dylib",
+        ]))
+        try await apps.launch(bundleID: "com.example.app")
+        #expect(captures.executable?.path == "/usr/bin/env")
+        #expect(captures.arguments == [
+            "SIMCTL_CHILD_DYLD_INSERT_LIBRARIES=/s/builds/a/VirtualMotion.dylib:/s/builds/a/DefaultsLookups.dylib",
+            "/usr/bin/xcrun", "simctl", "launch", "U", "com.example.app",
+        ])
     }
 
     @Test func `should report a launch that failed`() async {

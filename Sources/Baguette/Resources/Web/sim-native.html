@@ -1351,6 +1351,40 @@
     border-radius: 7px; color: var(--nv-text); font-size: 11px; padding: 5px 7px;
   }
   #simNativeView .defaults-host .df-value.df-num { text-align: right; }
+  /* Not set: a setting the running app reads that nothing stores. The
+     last column says where its value comes from instead of a delete —
+     there is nothing stored to delete. An untyped one puts its type
+     picker and value on a line of their own. */
+  #simNativeView .defaults-host .df-unset .df-value::placeholder { color: var(--nv-text-faint); font-style: italic; }
+  #simNativeView .defaults-host .df-source {
+    justify-self: center; font-size: 9.5px; font-weight: 600; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--nv-text-faint); cursor: default;
+  }
+  #simNativeView .defaults-host .df-item-pick { grid-template-columns: minmax(0, 1fr) 46px 22px; }
+  #simNativeView .defaults-host .df-item-pick .df-control {
+    grid-column: 1 / -1; grid-row: 2; justify-content: stretch; padding-bottom: 8px;
+  }
+  #simNativeView .defaults-host .df-pick-type { flex: 0 0 76px; width: 76px; }
+  /* Live: the running app watches this key (@AppStorage), so a change
+     reaches it without a relaunch. A dot, not a word, so the key keeps
+     its width. */
+  #simNativeView .defaults-host .df-live-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--nv-accent); margin: 0 6px 1px 0; vertical-align: middle;
+  }
+  #simNativeView .defaults-host .df-filter { margin-bottom: 10px; }
+  /* Monitor: a value the app itself just wrote fades in from a tint. */
+  #simNativeView .defaults-host .df-flash { animation: df-flash 1.6s ease-out; }
+  @keyframes df-flash {
+    from { background: color-mix(in srgb, var(--nv-accent) 22%, transparent); }
+    to   { background: transparent; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #simNativeView .defaults-host .df-flash { animation: none; outline: 1px solid var(--nv-accent); }
+  }
+  #simNativeView .defaults-host .df-discover {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 2px 0 4px;
+  }
   #simNativeView .defaults-host .df-value.df-bad { border-color: var(--nv-danger); }
   #simNativeView .defaults-host .df-row-error {
     color: var(--nv-danger); font: 500 11px/1.3 -apple-system, sans-serif;
@@ -1404,6 +1438,7 @@
     color: var(--nv-accent); border-radius: 8px; font: 600 12px/1 -apple-system, sans-serif; padding: 8px;
   }
   #simNativeView .defaults-host .df-secondary:hover { background: var(--nv-btn-hover); }
+  #simNativeView .defaults-host .df-secondary.df-sm { font-size: 11px; padding: 6px 10px; }
   #simNativeView .defaults-host .df-relaunch { display: flex; align-items: flex-start; gap: 10px; }
   #simNativeView .defaults-host .df-relaunch .df-switch { margin-top: 1px; }
   #simNativeView .defaults-host .df-relaunch-title { font: 600 12px/1.3 -apple-system, sans-serif; margin-bottom: 2px; }

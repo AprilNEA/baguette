@@ -16,10 +16,16 @@ final class SimctlApps: Apps, @unchecked Sendable {
     private let xcrun: URL
     private let ditto: URL
     private let maxExtractedBytes: Int64
+    private let libraries: @Sendable () async throws -> InjectedDylibs
+    private let env = URL(fileURLWithPath: "/usr/bin/env")
 
+    /// `libraries` is what a launched app loads: the ones armed on the
+    /// device plus `DefaultsLookups.dylib`, so the app baguette relaunches
+    /// can say which preferences it looks up. Empty launches plainly.
     init(
         udid: String,
         subprocess: any Subprocess = HostSubprocess(),
+        libraries: @escaping @Sendable () async throws -> InjectedDylibs = { InjectedDylibs(paths: []) },
         xcrun: URL = URL(fileURLWithPath: "/usr/bin/xcrun"),
         ditto: URL = URL(fileURLWithPath: "/usr/bin/ditto"),
         // The upload route caps the *compressed* body at 1 GiB, but a
@@ -34,6 +40,7 @@ final class SimctlApps: Apps, @unchecked Sendable {
         self.xcrun = xcrun
         self.ditto = ditto
         self.maxExtractedBytes = maxExtractedBytes
+        self.libraries = libraries
     }
 
     func install(_ app: AppBundle) async throws {
@@ -85,8 +92,18 @@ final class SimctlApps: Apps, @unchecked Sendable {
         guard status == 0 || status == 3 else { throw AppsError.terminateFailed(status: status) }
     }
 
+    /// simctl gives a launched app `SIMCTL_CHILD_DYLD_INSERT_LIBRARIES` *in
+    /// place of* the device-wide `DYLD_INSERT_LIBRARIES` (measured, Xcode
+    /// 27), so the list handed over is the whole list, armed ones included.
+    /// `env` sets it for simctl alone, not for baguette.
     func launch(bundleID: String) async throws {
-        let status = try await exitStatus(of: xcrun, arguments: ["simctl", "launch", udid, bundleID])
+        let launch = ["simctl", "launch", udid, bundleID]
+        let loaded = try await libraries()
+        let status = loaded.isEmpty
+            ? try await exitStatus(of: xcrun, arguments: launch)
+            : try await exitStatus(of: env, arguments: [
+                "SIMCTL_CHILD_DYLD_INSERT_LIBRARIES=\(loaded.environmentValue)", xcrun.path,
+            ] + launch)
         guard status == 0 else { throw AppsError.launchFailed(status: status) }
     }
 

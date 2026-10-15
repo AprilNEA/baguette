@@ -167,4 +167,45 @@ struct SimctlDefaultsTests {
             try await defaults.read(Self.app)
         }
     }
+
+    // MARK: - asking the running app what it looked up
+
+    /// A directory holding one app's answer, written by `pid`.
+    private func answering(_ plist: [String: Any]?, running: Set<Int32>) throws -> SimctlDefaults {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lookups-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        if let plist {
+            try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+                .write(to: directory.appendingPathComponent(
+                    SimctlDefaults.answerFileName(udid: "U", bundleID: "com.example.app")))
+        }
+        return SimctlDefaults(
+            udid: "U", subprocess: MockSubprocess(),
+            answers: directory, isRunning: { running.contains($0) }
+        )
+    }
+
+    @Test func `should hear which preferences the running app looked up`() async throws {
+        let defaults = try answering(
+            ["pid": 7, "lookups": [["key": "desk", "getter": "string"]]], running: [7])
+        let lookups = try await defaults.lookups(of: "com.example.app")
+        #expect(lookups?.all == [PreferenceLookup(key: "desk", type: .string)])
+    }
+
+    @Test func `should hear nothing when the app that answered has quit`() async throws {
+        let defaults = try answering(
+            ["pid": 7, "lookups": [["key": "desk", "getter": "string"]]], running: [])
+        #expect(try await defaults.lookups(of: "com.example.app") == nil)
+    }
+
+    @Test func `should hear nothing when the app was not launched able to answer`() async throws {
+        let defaults = try answering(nil, running: [7])
+        #expect(try await defaults.lookups(of: "com.example.app") == nil)
+    }
+
+    @Test func `should keep each simulator's and each app's answer apart`() {
+        #expect(SimctlDefaults.answerFileName(udid: "U", bundleID: "com.example.app")
+            == "BaguetteLookups-U-com.example.app.plist")
+    }
 }

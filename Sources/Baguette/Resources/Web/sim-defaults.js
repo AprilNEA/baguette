@@ -6,9 +6,10 @@
 // own.
 //
 // The card is a dumb sender. It lists apps (`apps.json`) and their groups
-// (`defaults/groups.json`), draws the typed values `defaults.json` reads back,
-// and posts each edit with the type it was read as; Swift validates and
-// stores. Row shaping and request bodies live in
+// (`defaults/groups.json`), draws the typed values `defaults.json` reads back
+// — and, under them, the settings the running app reads that nothing stores
+// (`lookups`) — and posts each edit with the type it was read as; Swift
+// validates and stores. Row shaping and request bodies live in
 // `defaults/preference-rows.js`, where they are unit-tested.
 // See `docs/features/defaults/README.md`.
 
@@ -34,6 +35,10 @@
   const ICON_CHEVRON = '<svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" '
     + 'stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
 
+  /** How often the open card re-reads. Each read is two simctl children
+   *  (~0.4 s measured), so this keeps well clear of overlapping itself. */
+  const WATCH_MS = 2000;
+
   const PLACEHOLDERS = {
     bool: 'true / false', int: '42', float: '1.5', string: 'text',
     date: '2026-01-02T03:04:05Z', data: 'base64', plist: '<array>…</array>',
@@ -47,11 +52,16 @@
       this.bundleId = null;
       this.suite = null;
       this.rows = [];
+      this.unset = [];           // settings the running app reads, nothing stores
+      this.answered = false;     // whether a running app said which it reads
       this.open = null;          // key of the expanded plist row
       this.rowErrors = {};       // key → message from a refused value
       this.drafts = {};          // key → the refused text, kept in its field
-      this.relaunch = true;
+      this.relaunch = true;      // relaunch when the app wouldn't see a change (whenNeeded)
+      this.filterText = '';
+      this.flash = [];           // keys the app just changed, highlighted once
       this._replaceKey = null;   // data row whose bytes the file picker replaces
+      this._poll = null;
     }
 
     /** @param {HTMLElement} host @param {string} udid */
@@ -61,10 +71,25 @@
       this.udid = udid;
       this._build();
       this._loadApps();
+      this._poll = setInterval(() => this._watch(), WATCH_MS);
     }
 
     detach() {
+      clearInterval(this._poll);
       if (this.host) { this.host.innerHTML = ''; this.host = null; }
+    }
+
+    /** Monitor: re-read while the card is open, so a value the app writes
+     *  shows up (and flashes) without pressing Reload. Skipped while the
+     *  card is shut (its sheet is inert), the tab is hidden, or a field in
+     *  the card has focus — a re-render would throw away what's being
+     *  typed. */
+    _watch() {
+      if (!this.host || !this.bundleId || document.hidden) return;
+      if (this.host.closest('[inert]')) return;
+      if (this.host.contains(document.activeElement) && document.activeElement.matches('input, textarea, select')) return;
+      if (this.open) return;
+      this._load({ quiet: true });
     }
 
     /** Re-read the device — the card opened again, things may have moved. */
@@ -99,9 +124,15 @@
         </div>
         <div class="df-notice" role="alert" hidden></div>
         <div class="df-section">
+          <input class="df-field df-mono df-filter" type="search" aria-label="Filter by key or type"
+                 placeholder="Filter by key or type" spellcheck="false">
           <div class="df-title"><span class="df-count"></span>
             <button class="df-icon" data-act="reload" aria-label="Reload" title="Reload">${ICON_RELOAD}</button></div>
           <div class="df-rows"></div>
+        </div>
+        <div class="df-section df-unset-section" hidden>
+          <div class="df-title"><span class="df-unset-count"></span></div>
+          <div class="df-unset-rows"></div>
         </div>
         <div class="df-section">
           <div class="df-title"><span>Add a key</span></div>
@@ -121,9 +152,10 @@
           <div class="df-relaunch">
             <button class="df-switch" data-act="relaunch" role="switch" aria-checked="true"
                     aria-labelledby="dfRelaunchLabel"><span></span></button>
-            <div><div class="df-relaunch-title" id="dfRelaunchLabel">Relaunch app after each change</div>
-              <div class="df-hint">A running app keeps its own copy of its defaults. Relaunching makes it
-                start from what you stored.</div></div>
+            <div><div class="df-relaunch-title" id="dfRelaunchLabel">Relaunch app when it won't see a change</div>
+              <div class="df-hint">A <span class="df-live-dot"></span> live setting (one the app watches, like
+                @AppStorage) changes in the running app at once. Others were read once, so the app is
+                relaunched to pick them up.</div></div>
           </div>
           <div class="df-status" role="status"></div>
           <div class="df-two">
@@ -135,6 +167,11 @@
         </div>`;
 
       this.host.addEventListener('click', (e) => this._onClick(e));
+      this.host.addEventListener('input', (e) => {
+        if (!e.target.matches('.df-filter')) return;
+        this.filterText = e.target.value;
+        this._render();
+      });
       this.host.addEventListener('change', (e) => this._onChange(e));
       this.host.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && e.target.matches('.df-new-key, .df-new-value')) this._add();
@@ -181,13 +218,25 @@
       }
     }
 
-    /** After a stored change: say what happened to the running app. */
-    _stored(what) {
-      if (this.relaunch) {
+    /** What the edit body asks of the running app. */
+    get _relaunchChoice() { return this.relaunch ? 'whenNeeded' : false; }
+
+    _isLive(key) {
+      return [...this.rows, ...this.unset].some((r) => r.key === key && r.live);
+    }
+
+    /** After a stored change: say what happened to the running app —
+     *  relaunched, changed live, or (relaunch off, a read-once key) still
+     *  on the old value. */
+    _stored(what, key, relaunched) {
+      if (relaunched) {
         this._status(`${what} · relaunched ${this._appName()}`);
+        this._reloadOnceAnswered();
+      } else if (key === null || this._isLive(key)) {
+        this._status(`${what} · ${this._appName()} updated live`);
       } else {
-        this._status(`${what}. ${this._appName()} may still be using the old value until it restarts.`,
-          { warn: true });
+        this._status(`${what}. ${this._appName()} read it once, so it may show the old value until it `
+          + 'reopens that screen or restarts.', { warn: true });
       }
     }
 
@@ -225,17 +274,33 @@
       this._load();
     }
 
-    async _load() {
+    /** A relaunched app reads its settings as its first screen builds, a
+     *  moment after launch; read again once it has had that moment. */
+    _reloadOnceAnswered() {
+      clearTimeout(this._answerTimer);
+      this._answerTimer = setTimeout(() => { if (this.host) this._load(); }, 1500);
+    }
+
+    async _load({ quiet = false } = {}) {
       const query = this._R.query({ bundleId: this.bundleId, suite: this.suite, plist: true });
       const res = await this._request('GET', `/defaults.json?${query}`);
+      if (quiet && !res.ok) return;
       if (!res.ok) {
         this.rows = [];
         this._render();
         this._showNotice(res.status, res.json);
         return;
       }
-      this._clearNotice();
-      this.rows = this._R.fromRead(res.json);
+      const rows = this._R.fromRead(res.json);
+      const unset = this._R.unsetFromRead(res.json);
+      const answered = this._R.answered(res.json);
+      const same = JSON.stringify([rows, unset, answered]) === JSON.stringify([this.rows, this.unset, this.answered]);
+      if (quiet && same) return;
+      this.flash = quiet ? this._R.changedKeys(this.rows, rows) : [];
+      if (!quiet) this._clearNotice();
+      this.rows = rows;
+      this.unset = unset;
+      this.answered = answered;
       this._render();
     }
 
@@ -265,19 +330,82 @@
       }
     }
 
+    _unsetControl(row) {
+      const bad = this.rowErrors[row.key];
+      const field = (type) => `<input class="df-value df-mono${type === 'int' || type === 'float' ? ' df-num' : ''}${bad ? ' df-bad' : ''}"
+               data-act="edit-unset" aria-label="${esc(row.key)}"
+               placeholder="${esc(row.placeholder || PLACEHOLDERS[type] || 'value')}"
+               value="${esc(bad ? this.drafts[row.key] : '')}"
+               ${bad ? 'aria-invalid="true"' : ''} spellcheck="false">`;
+      switch (row.control) {
+        case 'switch':
+          return `<button class="df-switch" role="switch" data-act="toggle-unset" aria-checked="${row.checked}"
+                   aria-label="${esc(row.key)}"><span></span></button>`;
+        case 'text':
+          return field(row.type);
+        default:
+          return `<select class="df-field df-mono df-pick-type" aria-label="${esc(row.key)} type">
+                    ${Object.keys(PLACEHOLDERS).map((t) => `<option value="${t}"${t === (row.type || 'string') ? ' selected' : ''}>${t}</option>`).join('')}
+                  </select>${field(row.type || 'string')}`;
+      }
+    }
+
+    /** The settings the running app reads that nothing stores — or, when no
+     *  running app can say, the relaunch that lets it. */
+    _renderUnset() {
+      const section = this._$('.df-unset-section');
+      const title = this._$('.df-unset-count');
+      const list = this._$('.df-unset-rows');
+      if (!this.answered) {
+        section.hidden = false;
+        title.textContent = 'Not set';
+        list.innerHTML = `<div class="df-discover">
+            <span class="df-hint">Settings still on the app's own default are known only to the running app.
+              Relaunch it from here and it can say which it reads.</span>
+            <button class="df-secondary df-sm" data-act="discover">Relaunch ${esc(this._appName())}</button>
+          </div>`;
+        return;
+      }
+      const n = this.unset.length;
+      const shown = this._R.filter(this.unset, this.filterText);
+      section.hidden = shown.length === 0;
+      title.textContent = `Not set · ${n} ${n === 1 ? 'key' : 'keys'} the app reads`;
+      list.innerHTML = shown.map((row) => `
+        <div class="df-item df-unset" data-key="${esc(row.key)}">
+          <div class="df-item-main${row.control === 'pick' ? ' df-item-pick' : ''}">
+            <span class="df-key df-mono" title="${esc(row.key)}${row.live ? ' — live: the running app updates at once' : ''}">${
+              row.live ? '<span class="df-live-dot"></span>' : ''}${esc(row.key)}</span>
+            <span class="df-type df-mono">${esc(row.type || 'any')}</span>
+            <div class="df-control">${this._unsetControl(row)}</div>
+            <span class="df-source" title="${row.source === 'registered'
+              ? 'The fallback the app registered' : "Set in the app's code; only the app knows it"}">${
+              row.source === 'registered' ? 'reg' : 'app'}</span>
+          </div>
+          ${this.rowErrors[row.key] ? `<div class="df-row-error">${esc(this.rowErrors[row.key])}</div>` : ''}
+        </div>`).join('');
+    }
+
     _render() {
+      this._renderUnset();
+      const shown = this._R.filter(this.rows, this.filterText);
       const n = this.rows.length;
       this._$('.df-count').textContent = `Stored · ${n} ${n === 1 ? 'key' : 'keys'}`;
       if (!n) {
         this._$('.df-rows').innerHTML = `<div class="df-empty"><b>Nothing stored in this suite</b>
-          <span class="df-hint">Values from register(defaults:) live only in the app's memory, so they
-          don't show here.</span></div>`;
+          <span class="df-hint">An app stores a setting only once it changes. The ones it reads but
+          hasn't stored are under Not set.</span></div>`;
         return;
       }
-      this._$('.df-rows').innerHTML = this.rows.map((row) => `
-        <div class="df-item" data-key="${esc(row.key)}">
+      if (!shown.length) {
+        this._$('.df-rows').innerHTML = `<div class="df-empty"><span class="df-hint">No stored key matches
+          “${esc(this.filterText.trim())}”.</span></div>`;
+        return;
+      }
+      this._$('.df-rows').innerHTML = shown.map((row) => `
+        <div class="df-item${this.flash.includes(row.key) ? ' df-flash' : ''}" data-key="${esc(row.key)}">
           <div class="df-item-main">
-            <span class="df-key df-mono" title="${esc(row.key)}">${esc(row.key)}</span>
+            <span class="df-key df-mono" title="${esc(row.key)}${row.live ? ' — live: the running app updates at once' : ''}">${
+              row.live ? '<span class="df-live-dot"></span>' : ''}${esc(row.key)}</span>
             <span class="df-type df-mono">${esc(row.type)}</span>
             <div class="df-control">${this._control(row)}</div>
             <button class="df-icon df-delete" data-act="delete" aria-label="Delete ${esc(row.key)}"
@@ -298,7 +426,7 @@
 
     async _write(key, type, value) {
       const body = this._R.writeBody({
-        bundleId: this.bundleId, suite: this.suite, key, type, value, relaunch: this.relaunch,
+        bundleId: this.bundleId, suite: this.suite, key, type, value, relaunch: this._relaunchChoice,
       });
       const res = await this._request('POST', '/defaults', body);
       if (res.status === 400) {
@@ -311,17 +439,17 @@
       delete this.rowErrors[key];
       delete this.drafts[key];
       this._clearNotice();
-      this._stored(`Wrote ${key}`);
+      this._stored(`Wrote ${key}`, key, !!(res.json && res.json.relaunched));
       await this._load();
       return true;
     }
 
     async _delete(key) {
-      const query = this._R.query({ bundleId: this.bundleId, suite: this.suite, key, relaunch: this.relaunch });
+      const query = this._R.query({ bundleId: this.bundleId, suite: this.suite, key, relaunch: this._relaunchChoice });
       const res = await this._request('DELETE', `/defaults?${query}`);
       if (!res.ok) { this._showNotice(res.status, res.json); return; }
       delete this.rowErrors[key];
-      this._stored(`Removed ${key}`);
+      this._stored(`Removed ${key}`, key, !!(res.json && res.json.relaunched));
       this._load();
     }
 
@@ -332,14 +460,14 @@
       const value = this._$('.df-new-value').value;
       const body = this._R.writeBody({
         bundleId: this.bundleId, suite: this.suite, key, type,
-        value: type === 'bool' ? value.trim() : value, relaunch: this.relaunch,
+        value: type === 'bool' ? value.trim() : value, relaunch: this._relaunchChoice,
       });
       const res = await this._request('POST', '/defaults', body);
       if (!res.ok) { this._showNotice(res.status, res.json); return; }
       this._clearNotice();
       this._$('.df-new-key').value = '';
       this._$('.df-new-value').value = '';
-      this._stored(`Wrote ${key}`);
+      this._stored(`Wrote ${key}`, key, !!(res.json && res.json.relaunched));
       this._load();
     }
 
@@ -365,13 +493,16 @@
         return;
       }
       const body = this._R.importBody({
-        bundleId: this.bundleId, suite: this.suite, file: parsed, relaunch: this.relaunch,
+        bundleId: this.bundleId, suite: this.suite, file: parsed, relaunch: this._relaunchChoice,
       });
       const res = await this._request('POST', '/defaults', body);
       if (!res.ok) { this._showNotice(res.status, res.json); return; }
       this._clearNotice();
       const n = res.json.written;
-      this._stored(`Imported ${n} ${n === 1 ? 'value' : 'values'}`);
+      // An import that wasn't relaunched either was all live keys, or ran
+      // with relaunch off — say live only for the first.
+      this._stored(`Imported ${n} ${n === 1 ? 'value' : 'values'}`,
+        this.relaunch ? null : '', !!res.json.relaunched);
       this._load();
     }
 
@@ -399,6 +530,19 @@
         case 'replace': this._replaceKey = key; this._$('.df-data-file').click(); break;
         case 'delete': this._delete(key); break;
         case 'reload': this._load(); break;
+        case 'toggle-unset': {
+          const lookup = this.unset.find((r) => r.key === key);
+          this._write(key, 'bool', !lookup.checked);
+          break;
+        }
+        case 'discover':
+          this._request('POST', `/relaunch?${this._R.query({ bundleId: this.bundleId })}`)
+            .then((res) => {
+              if (!res.ok) { this._showNotice(res.status, res.json); return; }
+              this._status(`Relaunched ${this._appName()}`);
+              this._reloadOnceAnswered();
+            });
+          break;
         case 'add': this._add(); break;
         case 'export': this._export(); break;
         case 'import': this._$('.df-import-file').click(); break;
@@ -408,9 +552,11 @@
           break;
         case 'relaunch-now':
           this._request('POST', `/relaunch?${this._R.query({ bundleId: this.bundleId })}`)
-            .then((res) => res.ok
-              ? this._status(`Relaunched ${this._appName()}`)
-              : this._showNotice(res.status, res.json));
+            .then((res) => {
+              if (!res.ok) { this._showNotice(res.status, res.json); return; }
+              this._status(`Relaunched ${this._appName()}`);
+              this._reloadOnceAnswered();
+            });
           break;
         case 'boot':
           this._request('POST', '/boot').then(() => this._loadApps());
@@ -439,6 +585,18 @@
       }
       if (t.matches('.df-new-type')) {
         this._$('.df-new-value').placeholder = PLACEHOLDERS[t.value] || '';
+        return;
+      }
+      if (t.dataset.act === 'edit-unset') {
+        const item = t.closest('.df-item');
+        const lookup = this.unset.find((r) => r.key === item.dataset.key);
+        const picked = item.querySelector('.df-pick-type');
+        if (t.value === '') return;
+        this._write(lookup.key, picked ? picked.value : lookup.type, t.value);
+        return;
+      }
+      if (t.matches('.df-pick-type')) {
+        t.closest('.df-item').querySelector('.df-value').placeholder = PLACEHOLDERS[t.value] || '';
         return;
       }
       if (t.dataset.act === 'edit') {

@@ -35,11 +35,76 @@
     };
   }
 
+  /** A setting the running app reads that nothing stores. Its value comes
+   *  from a registered fallback (`source: 'registered'`, shown) or from the
+   *  app's own code (`source: 'app'`, which no one outside the app can
+   *  see). An untyped read asks for a type before a value. */
+  function unsetRow(lookup) {
+    const { key } = lookup;
+    const type = lookup.type || null;
+    const registered = lookup.registered;
+    const source = registered ? 'registered' : 'app';
+    if (type === 'bool') {
+      return { key, type, control: 'switch', source, checked: !!registered && registered.value === true };
+    }
+    if (TEXT_TYPES.includes(type)) {
+      return {
+        key, type, control: 'text', source, text: '',
+        placeholder: registered ? String(registered.value) : "app's default",
+      };
+    }
+    return { key, type, control: 'pick', source };
+  }
+
+  /** The keys the running app watches, so a change reaches it at once. */
+  function liveKeys(read) {
+    return new Set((read && read.lookups && read.lookups.live) || []);
+  }
+
+  /** `true` / `false` / `'whenNeeded'` as the server reads it. */
+  function relaunchWire(relaunch) {
+    return relaunch === 'whenNeeded' ? 'whenNeeded' : !!relaunch;
+  }
+
   const PreferenceRows = {
-    /** `GET defaults.json?…&plist=1` → rows in key order. */
+    /** `GET defaults.json?…&plist=1` → rows in key order, each marked
+     *  `live` when the running app watches its key. */
     fromRead(read) {
       const values = (read && read.values) || {};
-      return Object.keys(values).sort().map((key) => row(key, values[key]));
+      const live = liveKeys(read);
+      return Object.keys(values).sort().map((key) => ({ ...row(key, values[key]), live: live.has(key) }));
+    },
+
+    /** Stored values that differ from the last read — added or changed —
+     *  so the card can show the app writing them. Nothing on a first read. */
+    changedKeys(before, after) {
+      if (!before.length) return [];
+      const was = new Map(before.map((r) => [r.key, JSON.stringify([r.type, r.text, r.checked, r.summary])]));
+      return after
+        .filter((r) => was.get(r.key) !== JSON.stringify([r.type, r.text, r.checked, r.summary]))
+        .map((r) => r.key)
+        .sort();
+    },
+
+    /** Rows whose key or type contains `text`, ignoring case. */
+    filter(rows, text) {
+      const needle = String(text || '').trim().toLowerCase();
+      if (!needle) return rows;
+      return rows.filter((r) => r.key.toLowerCase().includes(needle) || String(r.type || '').includes(needle));
+    },
+
+    /** Whether a running app said which settings it reads — false when it
+     *  wasn't launched by baguette, so the card can offer a relaunch. */
+    answered(read) {
+      return !!(read && read.lookups && read.lookups.answered);
+    },
+
+    /** The settings the running app reads that nothing stores, in the
+     *  order the server sent (key order). */
+    unsetFromRead(read) {
+      if (!PreferenceRows.answered(read)) return [];
+      const live = liveKeys(read);
+      return (read.lookups.unset || []).map((lookup) => ({ ...unsetRow(lookup), live: live.has(lookup.key) }));
     },
 
     /** One value, posted as the type it was read as; arrays and
@@ -50,7 +115,7 @@
       body.key = key;
       body.type = type === 'array' || type === 'dict' ? 'plist' : type;
       body.value = value;
-      body.relaunch = !!relaunch;
+      body.relaunch = relaunchWire(relaunch);
       return body;
     },
 
@@ -59,7 +124,7 @@
       const body = { bundleId };
       if (suite) body.suite = suite;
       body.values = file && typeof file.values === 'object' ? file.values : file;
-      body.relaunch = !!relaunch;
+      body.relaunch = relaunchWire(relaunch);
       return body;
     },
 
@@ -68,7 +133,8 @@
       const parts = [`bundleId=${encodeURIComponent(bundleId)}`];
       if (suite) parts.push(`suite=${encodeURIComponent(suite)}`);
       if (key !== undefined && key !== null) parts.push(`key=${encodeURIComponent(key)}`);
-      if (relaunch) parts.push('relaunch=1');
+      if (relaunch === 'whenNeeded') parts.push('relaunch=whenNeeded');
+      else if (relaunch) parts.push('relaunch=1');
       if (plist) parts.push('plist=1');
       return parts.join('&');
     },
