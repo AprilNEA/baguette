@@ -36,7 +36,7 @@ struct LitPanelTests {
         #expect(sim.litPanel(in: chromes) == .primary)
     }
 
-    /// The hinge read is a devicectl round-trip; a phone must not pay it.
+    /// The hinge read is a guest round-trip; a phone must not pay it.
     @Test func `should never ask the hinge of a single-panel device`() {
         let sim = MockSimulator()
         let chromes = MockChromes()

@@ -8,7 +8,7 @@ import Mockable
 /// its framebuffer and digitizer through it. Single-panel devices have
 /// no hinge and never ask.
 ///
-/// Read through `DevicectlHinge`; driven through `HingeMotor`, which
+/// Read through `GuestHinge`; driven through `HingeMotor`, which
 /// runs `HingeControl` in the guest to send the pose events Device Hub
 /// sends. `SharedHinge` composes the two.
 @Mockable
