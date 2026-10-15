@@ -35,6 +35,10 @@
   const ICON_CHEVRON = '<svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" '
     + 'stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
 
+  /** How often the open card re-reads. Each read is two simctl children
+   *  (~0.4 s measured), so this keeps well clear of overlapping itself. */
+  const WATCH_MS = 2000;
+
   const PLACEHOLDERS = {
     bool: 'true / false', int: '42', float: '1.5', string: 'text',
     date: '2026-01-02T03:04:05Z', data: 'base64', plist: '<array>…</array>',
@@ -53,8 +57,11 @@
       this.open = null;          // key of the expanded plist row
       this.rowErrors = {};       // key → message from a refused value
       this.drafts = {};          // key → the refused text, kept in its field
-      this.relaunch = true;
+      this.relaunch = true;      // relaunch when the app wouldn't see a change (whenNeeded)
+      this.filterText = '';
+      this.flash = [];           // keys the app just changed, highlighted once
       this._replaceKey = null;   // data row whose bytes the file picker replaces
+      this._poll = null;
     }
 
     /** @param {HTMLElement} host @param {string} udid */
@@ -64,10 +71,25 @@
       this.udid = udid;
       this._build();
       this._loadApps();
+      this._poll = setInterval(() => this._watch(), WATCH_MS);
     }
 
     detach() {
+      clearInterval(this._poll);
       if (this.host) { this.host.innerHTML = ''; this.host = null; }
+    }
+
+    /** Monitor: re-read while the card is open, so a value the app writes
+     *  shows up (and flashes) without pressing Reload. Skipped while the
+     *  card is shut (its sheet is inert), the tab is hidden, or a field in
+     *  the card has focus — a re-render would throw away what's being
+     *  typed. */
+    _watch() {
+      if (!this.host || !this.bundleId || document.hidden) return;
+      if (this.host.closest('[inert]')) return;
+      if (this.host.contains(document.activeElement) && document.activeElement.matches('input, textarea, select')) return;
+      if (this.open) return;
+      this._load({ quiet: true });
     }
 
     /** Re-read the device — the card opened again, things may have moved. */
@@ -102,6 +124,8 @@
         </div>
         <div class="df-notice" role="alert" hidden></div>
         <div class="df-section">
+          <input class="df-field df-mono df-filter" type="search" aria-label="Filter by key or type"
+                 placeholder="Filter by key or type" spellcheck="false">
           <div class="df-title"><span class="df-count"></span>
             <button class="df-icon" data-act="reload" aria-label="Reload" title="Reload">${ICON_RELOAD}</button></div>
           <div class="df-rows"></div>
@@ -128,9 +152,10 @@
           <div class="df-relaunch">
             <button class="df-switch" data-act="relaunch" role="switch" aria-checked="true"
                     aria-labelledby="dfRelaunchLabel"><span></span></button>
-            <div><div class="df-relaunch-title" id="dfRelaunchLabel">Relaunch app after each change</div>
-              <div class="df-hint">A running app keeps its own copy of its defaults. Relaunching makes it
-                start from what you stored.</div></div>
+            <div><div class="df-relaunch-title" id="dfRelaunchLabel">Relaunch app when it won't see a change</div>
+              <div class="df-hint">A <span class="df-live-dot"></span> live setting (one the app watches, like
+                @AppStorage) changes in the running app at once. Others were read once, so the app is
+                relaunched to pick them up.</div></div>
           </div>
           <div class="df-status" role="status"></div>
           <div class="df-two">
@@ -142,6 +167,11 @@
         </div>`;
 
       this.host.addEventListener('click', (e) => this._onClick(e));
+      this.host.addEventListener('input', (e) => {
+        if (!e.target.matches('.df-filter')) return;
+        this.filterText = e.target.value;
+        this._render();
+      });
       this.host.addEventListener('change', (e) => this._onChange(e));
       this.host.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && e.target.matches('.df-new-key, .df-new-value')) this._add();
@@ -188,14 +218,25 @@
       }
     }
 
-    /** After a stored change: say what happened to the running app. */
-    _stored(what) {
-      if (this.relaunch) {
+    /** What the edit body asks of the running app. */
+    get _relaunchChoice() { return this.relaunch ? 'whenNeeded' : false; }
+
+    _isLive(key) {
+      return [...this.rows, ...this.unset].some((r) => r.key === key && r.live);
+    }
+
+    /** After a stored change: say what happened to the running app —
+     *  relaunched, changed live, or (relaunch off, a read-once key) still
+     *  on the old value. */
+    _stored(what, key, relaunched) {
+      if (relaunched) {
         this._status(`${what} · relaunched ${this._appName()}`);
         this._reloadOnceAnswered();
+      } else if (key === null || this._isLive(key)) {
+        this._status(`${what} · ${this._appName()} updated live`);
       } else {
-        this._status(`${what}. ${this._appName()} may still be using the old value until it restarts.`,
-          { warn: true });
+        this._status(`${what}. ${this._appName()} read it once, so it may show the old value until it `
+          + 'reopens that screen or restarts.', { warn: true });
       }
     }
 
@@ -240,19 +281,26 @@
       this._answerTimer = setTimeout(() => { if (this.host) this._load(); }, 1500);
     }
 
-    async _load() {
+    async _load({ quiet = false } = {}) {
       const query = this._R.query({ bundleId: this.bundleId, suite: this.suite, plist: true });
       const res = await this._request('GET', `/defaults.json?${query}`);
+      if (quiet && !res.ok) return;
       if (!res.ok) {
         this.rows = [];
         this._render();
         this._showNotice(res.status, res.json);
         return;
       }
-      this._clearNotice();
-      this.rows = this._R.fromRead(res.json);
-      this.unset = this._R.unsetFromRead(res.json);
-      this.answered = this._R.answered(res.json);
+      const rows = this._R.fromRead(res.json);
+      const unset = this._R.unsetFromRead(res.json);
+      const answered = this._R.answered(res.json);
+      const same = JSON.stringify([rows, unset, answered]) === JSON.stringify([this.rows, this.unset, this.answered]);
+      if (quiet && same) return;
+      this.flash = quiet ? this._R.changedKeys(this.rows, rows) : [];
+      if (!quiet) this._clearNotice();
+      this.rows = rows;
+      this.unset = unset;
+      this.answered = answered;
       this._render();
     }
 
@@ -319,12 +367,14 @@
         return;
       }
       const n = this.unset.length;
-      section.hidden = n === 0;
+      const shown = this._R.filter(this.unset, this.filterText);
+      section.hidden = shown.length === 0;
       title.textContent = `Not set · ${n} ${n === 1 ? 'key' : 'keys'} the app reads`;
-      list.innerHTML = this.unset.map((row) => `
+      list.innerHTML = shown.map((row) => `
         <div class="df-item df-unset" data-key="${esc(row.key)}">
           <div class="df-item-main${row.control === 'pick' ? ' df-item-pick' : ''}">
-            <span class="df-key df-mono" title="${esc(row.key)}">${esc(row.key)}</span>
+            <span class="df-key df-mono" title="${esc(row.key)}${row.live ? ' — live: the running app updates at once' : ''}">${
+              row.live ? '<span class="df-live-dot"></span>' : ''}${esc(row.key)}</span>
             <span class="df-type df-mono">${esc(row.type || 'any')}</span>
             <div class="df-control">${this._unsetControl(row)}</div>
             <span class="df-source" title="${row.source === 'registered'
@@ -337,6 +387,7 @@
 
     _render() {
       this._renderUnset();
+      const shown = this._R.filter(this.rows, this.filterText);
       const n = this.rows.length;
       this._$('.df-count').textContent = `Stored · ${n} ${n === 1 ? 'key' : 'keys'}`;
       if (!n) {
@@ -345,10 +396,16 @@
           hasn't stored are under Not set.</span></div>`;
         return;
       }
-      this._$('.df-rows').innerHTML = this.rows.map((row) => `
-        <div class="df-item" data-key="${esc(row.key)}">
+      if (!shown.length) {
+        this._$('.df-rows').innerHTML = `<div class="df-empty"><span class="df-hint">No stored key matches
+          “${esc(this.filterText.trim())}”.</span></div>`;
+        return;
+      }
+      this._$('.df-rows').innerHTML = shown.map((row) => `
+        <div class="df-item${this.flash.includes(row.key) ? ' df-flash' : ''}" data-key="${esc(row.key)}">
           <div class="df-item-main">
-            <span class="df-key df-mono" title="${esc(row.key)}">${esc(row.key)}</span>
+            <span class="df-key df-mono" title="${esc(row.key)}${row.live ? ' — live: the running app updates at once' : ''}">${
+              row.live ? '<span class="df-live-dot"></span>' : ''}${esc(row.key)}</span>
             <span class="df-type df-mono">${esc(row.type)}</span>
             <div class="df-control">${this._control(row)}</div>
             <button class="df-icon df-delete" data-act="delete" aria-label="Delete ${esc(row.key)}"
@@ -369,7 +426,7 @@
 
     async _write(key, type, value) {
       const body = this._R.writeBody({
-        bundleId: this.bundleId, suite: this.suite, key, type, value, relaunch: this.relaunch,
+        bundleId: this.bundleId, suite: this.suite, key, type, value, relaunch: this._relaunchChoice,
       });
       const res = await this._request('POST', '/defaults', body);
       if (res.status === 400) {
@@ -382,17 +439,17 @@
       delete this.rowErrors[key];
       delete this.drafts[key];
       this._clearNotice();
-      this._stored(`Wrote ${key}`);
+      this._stored(`Wrote ${key}`, key, !!(res.json && res.json.relaunched));
       await this._load();
       return true;
     }
 
     async _delete(key) {
-      const query = this._R.query({ bundleId: this.bundleId, suite: this.suite, key, relaunch: this.relaunch });
+      const query = this._R.query({ bundleId: this.bundleId, suite: this.suite, key, relaunch: this._relaunchChoice });
       const res = await this._request('DELETE', `/defaults?${query}`);
       if (!res.ok) { this._showNotice(res.status, res.json); return; }
       delete this.rowErrors[key];
-      this._stored(`Removed ${key}`);
+      this._stored(`Removed ${key}`, key, !!(res.json && res.json.relaunched));
       this._load();
     }
 
@@ -403,14 +460,14 @@
       const value = this._$('.df-new-value').value;
       const body = this._R.writeBody({
         bundleId: this.bundleId, suite: this.suite, key, type,
-        value: type === 'bool' ? value.trim() : value, relaunch: this.relaunch,
+        value: type === 'bool' ? value.trim() : value, relaunch: this._relaunchChoice,
       });
       const res = await this._request('POST', '/defaults', body);
       if (!res.ok) { this._showNotice(res.status, res.json); return; }
       this._clearNotice();
       this._$('.df-new-key').value = '';
       this._$('.df-new-value').value = '';
-      this._stored(`Wrote ${key}`);
+      this._stored(`Wrote ${key}`, key, !!(res.json && res.json.relaunched));
       this._load();
     }
 
@@ -436,13 +493,16 @@
         return;
       }
       const body = this._R.importBody({
-        bundleId: this.bundleId, suite: this.suite, file: parsed, relaunch: this.relaunch,
+        bundleId: this.bundleId, suite: this.suite, file: parsed, relaunch: this._relaunchChoice,
       });
       const res = await this._request('POST', '/defaults', body);
       if (!res.ok) { this._showNotice(res.status, res.json); return; }
       this._clearNotice();
       const n = res.json.written;
-      this._stored(`Imported ${n} ${n === 1 ? 'value' : 'values'}`);
+      // An import that wasn't relaunched either was all live keys, or ran
+      // with relaunch off — say live only for the first.
+      this._stored(`Imported ${n} ${n === 1 ? 'value' : 'values'}`,
+        this.relaunch ? null : '', !!res.json.relaunched);
       this._load();
     }
 

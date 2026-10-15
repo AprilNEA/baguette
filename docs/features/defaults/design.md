@@ -130,6 +130,25 @@ Dead ends and traps:
   method gets an NSUserDefaults override (`class_addMethod`) that forwards to
   NSObject's.
 
+## Live or relaunch
+
+A write through the guest's `defaults` tool reaches a running app that
+watches the key: cfprefsd tells the app's `NSUserDefaults`, KVO fires, and
+SwiftUI redraws an `@AppStorage` view. Measured on Unveil (iOS 27.0): writing
+`unveil-ios-appearance` from Dark to Light with no relaunch switched the open
+project to light mode, same pid (42586), same screen. A key the app copied into
+state (`DirectorsChair` reads `desk` when a project opens) didn't change on the
+open screen; leaving and reopening the project showed it, still the same pid.
+One read only at launch would need a relaunch.
+
+`Relaunch.whenNeeded` uses the one fact visible from outside: which keys
+SwiftUI observes (`PreferenceLookup.live`, from the dylib's `observed`). It
+writes those in place and relaunches for everything else, since "read when a
+screen is built" and "read once at launch" look the same from outside. With no
+running app to ask, it relaunches. Observers made through
+`didChangeNotification` or Combine aren't recorded yet, so those keys
+relaunch when they needn't.
+
 ## Known limits
 
 - A running app's in-memory `UserDefaults` is out of reach. `--relaunch` is the

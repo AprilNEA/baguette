@@ -158,3 +158,36 @@ test('a read tells whether the running app answered which settings it reads', ()
   assert.equal(Rows().answered({ values: {} }), false);
   assert.deepEqual(Rows().unsetFromRead({ lookups: { answered: false } }), []);
 });
+
+test('an edit can ask to relaunch only when the running app would not see it', () => {
+  const R = Rows();
+  assert.equal(R.writeBody({ bundleId: 'com.x', key: 'k', type: 'bool', value: true, relaunch: 'whenNeeded' }).relaunch, 'whenNeeded');
+  assert.equal(R.importBody({ bundleId: 'com.x', file: {}, relaunch: 'whenNeeded' }).relaunch, 'whenNeeded');
+  assert.equal(R.query({ bundleId: 'com.x', key: 'k', relaunch: 'whenNeeded' }), 'bundleId=com.x&key=k&relaunch=whenNeeded');
+});
+
+test('a row the running app watches is marked live, stored or not', () => {
+  const read = {
+    values: { 'unveil-ios-glass': { type: 'string', value: 'Tinted' }, desk: { type: 'string', value: 'rows' } },
+    lookups: { answered: true, live: ['unveil-ios-glass', 'unveil-ios-appearance'], unset: [{ key: 'unveil-ios-appearance', type: 'string' }, { key: 'shelf.preview', type: 'bool' }] },
+  };
+  const R = Rows();
+  assert.deepEqual(R.fromRead(read).map((r) => [r.key, r.live]), [['desk', false], ['unveil-ios-glass', true]]);
+  assert.deepEqual(R.unsetFromRead(read).map((r) => [r.key, r.live]), [['unveil-ios-appearance', true], ['shelf.preview', false]]);
+});
+
+test('a re-read names the stored values that changed since the last one', () => {
+  const R = Rows();
+  const before = R.fromRead({ values: { desk: { type: 'string', value: 'rows' }, seen: { type: 'bool', value: false } } });
+  const after = R.fromRead({ values: { desk: { type: 'string', value: 'board' }, seen: { type: 'bool', value: false }, added: { type: 'int', value: 1 } } });
+  assert.deepEqual(R.changedKeys(before, after), ['added', 'desk']);
+  assert.deepEqual(R.changedKeys([], after), []);
+});
+
+test('a filter keeps the rows whose key or type matches, ignoring case', () => {
+  const R = Rows();
+  const rows = R.fromRead({ values: { 'unveil-ios-glass': { type: 'string', value: 'x' }, onboarded: { type: 'bool', value: true } } });
+  assert.deepEqual(R.filter(rows, 'GLASS').map((r) => r.key), ['unveil-ios-glass']);
+  assert.deepEqual(R.filter(rows, 'bool').map((r) => r.key), ['onboarded']);
+  assert.equal(R.filter(rows, '  ').length, 2);
+});

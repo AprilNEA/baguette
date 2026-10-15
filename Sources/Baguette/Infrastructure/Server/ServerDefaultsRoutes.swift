@@ -12,7 +12,10 @@ extension Server {
     /// `GET    /simulators/:udid/defaults.json?bundleId=…[&suite=…][&key=…]`
     /// `POST   /simulators/:udid/defaults`   `{"bundleId","suite"?,"key","type","value","relaunch"?}`
     ///                                       or `{"bundleId","suite"?,"values":{…},"relaunch"?}` to import
-    /// `DELETE /simulators/:udid/defaults?bundleId=…[&suite=…]&key=…[&relaunch=1]`
+    /// `DELETE /simulators/:udid/defaults?bundleId=…[&suite=…]&key=…[&relaunch=1|whenNeeded]`
+    ///
+    /// `relaunch` is `true` / `false` or `"whenNeeded"` (only for a key the
+    /// running app doesn't watch); every edit answers `relaunched`.
     ///
     /// And for the focus page's Defaults card:
     /// `GET    /simulators/:udid/apps.json`                       installed apps, by name
@@ -163,6 +166,7 @@ extension Server {
         guard let text = valueText(fields["value"]) else {
             return .badRequest("value is required (a string, number or boolean)")
         }
+        guard let relaunch = Relaunch(wire: fields["relaunch"]) else { return Self.badRelaunch }
         let edit: PreferenceEdit
         do {
             edit = PreferenceEdit(
@@ -171,12 +175,14 @@ extension Server {
                 ),
                 key: key,
                 change: .set(try PreferenceValue.parse(type: type, value: text)),
-                relaunch: fields["relaunch"] as? Bool ?? false
+                relaunch: relaunch
             )
         } catch {
             return .badRequest("\(error)")
         }
-        return await apply(edit, udid: udid, simulators: simulators) { _ in #"{"ok":true}"# }
+        return await apply(edit, udid: udid, simulators: simulators) {
+            #"{"ok":true,"relaunched":\#($0.relaunched)}"#
+        }
     }
 
     /// A body carrying `values` (a `defaults export`'s map) writes them all,
@@ -184,6 +190,7 @@ extension Server {
     private static func importDefaults(
         fields: [String: Any], values: Any, udid: String, simulators: any Simulators
     ) async -> DefaultsOutcome {
+        guard let relaunch = Relaunch(wire: fields["relaunch"]) else { return Self.badRelaunch }
         let restore: PreferenceImport
         do {
             let map = try JSONSerialization.data(withJSONObject: ["values": values])
@@ -192,15 +199,15 @@ extension Server {
                     bundleID: fields["bundleId"] as? String ?? "", name: fields["suite"] as? String
                 ),
                 preferences: try Preferences(importing: map),
-                relaunch: fields["relaunch"] as? Bool ?? false
+                relaunch: relaunch
             )
         } catch {
             return .badRequest("\(error)")
         }
         guard !udid.isEmpty, let sim = simulators.find(udid: udid) else { return .unknownDevice }
         do {
-            let written = try await restore.apply(on: sim.defaults(), apps: sim.apps())
-            return .ok(#"{"ok":true,"written":\#(written)}"#)
+            let applied = try await restore.apply(on: sim.defaults(), apps: sim.apps())
+            return .ok(#"{"ok":true,"relaunched":\#(applied.relaunched),"written":\#(applied.written)}"#)
         } catch {
             return outcome(for: error)
         }
@@ -211,19 +218,20 @@ extension Server {
         udid: String, query: [String: String], simulators: any Simulators
     ) async -> DefaultsOutcome {
         guard let key = query["key"], !key.isEmpty else { return .badRequest("key is required") }
+        guard let relaunch = Relaunch(wire: query["relaunch"]) else { return Self.badRelaunch }
         let edit: PreferenceEdit
         do {
             edit = PreferenceEdit(
                 suite: try PreferenceSuite(bundleID: query["bundleId"] ?? "", name: query["suite"]),
                 key: key,
                 change: .remove,
-                relaunch: ["1", "true"].contains(query["relaunch"] ?? "")
+                relaunch: relaunch
             )
         } catch {
             return .badRequest("\(error)")
         }
         return await apply(edit, udid: udid, simulators: simulators) {
-            #"{"ok":true,"removed":\#($0)}"#
+            #"{"ok":true,"relaunched":\#($0.relaunched),"removed":\#($0.changed)}"#
         }
     }
 
@@ -287,9 +295,11 @@ extension Server {
         }
     }
 
+    private static let badRelaunch = DefaultsOutcome.badRequest(#"relaunch must be true, false or "whenNeeded""#)
+
     private static func apply(
         _ edit: PreferenceEdit, udid: String, simulators: any Simulators,
-        answer: (Bool) -> String
+        answer: (PreferenceEdit.Applied) -> String
     ) async -> DefaultsOutcome {
         guard !udid.isEmpty, let sim = simulators.find(udid: udid) else { return .unknownDevice }
         do {

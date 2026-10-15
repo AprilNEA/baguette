@@ -94,7 +94,7 @@ struct PreferenceLookupsTests {
             "lookups": [["key": "unveil-ios-glass", "getter": "string", "by": "swiftui"]],
             "observed": [["key": "unveil-ios-glass"]],
         ])))
-        #expect(lookups.all == [PreferenceLookup(key: "unveil-ios-glass", type: .string)])
+        #expect(lookups.all == [PreferenceLookup(key: "unveil-ios-glass", type: .string, live: true)])
     }
 
     @Test func `should not count SwiftUI reading its own flags when it does not watch them`() throws {
@@ -114,6 +114,42 @@ struct PreferenceLookupsTests {
     @Test func `should not answer when the app's answer is not a lookups plist`() {
         #expect(PreferenceLookups(answer: Data("<plist><dict><key>pid".utf8)) == nil)
         #expect(PreferenceLookups(answer: Data("[]".utf8)) == nil)
+    }
+
+    // MARK: - live or read once
+
+    @Test func `should know the running app updates at once on a key SwiftUI watches`() throws {
+        // `@AppStorage` observes its key, and cfprefsd tells the app when a
+        // write lands — measured: Dark → Light with no relaunch, same pid.
+        let lookups = try #require(PreferenceLookups(answer: try answer([
+            "pid": 1,
+            "lookups": [
+                ["key": "unveil-ios-glass", "getter": "string", "by": "swiftui"],
+                ["key": "desk", "getter": "string", "by": "app"],
+            ],
+            "observed": [["key": "unveil-ios-glass"]],
+        ])))
+        let standard = try PreferenceSuite(bundleID: "com.onegai.unveil")
+        #expect(lookups.isLive("unveil-ios-glass", in: standard))
+        #expect(lookups.all.first { $0.key == "unveil-ios-glass" }?.live == true)
+    }
+
+    @Test func `should know the app sees a key it only read once after a relaunch`() throws {
+        let lookups = PreferenceLookups(pid: 1, all: [PreferenceLookup(key: "desk", type: .string)])
+        let standard = try PreferenceSuite(bundleID: "com.onegai.unveil")
+        #expect(lookups.isLive("desk", in: standard) == false)
+        #expect(lookups.isLive("never-read", in: standard) == false)
+    }
+
+    @Test func `should name the keys the running app updates at once in a suite read`() throws {
+        let lookups = PreferenceLookups(pid: 1, all: [
+            PreferenceLookup(key: "unveil-ios-glass", type: .string, live: true),
+            PreferenceLookup(key: "desk", type: .string),
+            PreferenceLookup(key: "theme", suite: "group.x", type: .string, live: true),
+        ])
+        let standard = try PreferenceSuite(bundleID: "com.onegai.unveil")
+        let json = PreferenceLookups.json(lookups, unsetIn: Preferences(values: ["desk": .string("rows")]), suite: standard)
+        #expect(json["live"] as? [String] == ["unveil-ios-glass"])
     }
 
     // MARK: - against what's stored

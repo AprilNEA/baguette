@@ -14,12 +14,21 @@ public struct PreferenceLookup: Equatable, Sendable {
     /// `nil` when the app only ever asked untyped (`object(forKey:)`).
     public let type: PreferenceType?
     public let registered: PreferenceValue?
+    /// Whether the running app updates the moment this key changes: SwiftUI
+    /// observes it (`@AppStorage`), and cfprefsd tells the app when a write
+    /// lands. A key the app only read once — into a property, at startup —
+    /// is seen only after a relaunch.
+    public let live: Bool
 
-    public init(key: String, suite: String? = nil, type: PreferenceType?, registered: PreferenceValue? = nil) {
+    public init(
+        key: String, suite: String? = nil, type: PreferenceType?,
+        registered: PreferenceValue? = nil, live: Bool = false
+    ) {
         self.key = key
         self.suite = suite
         self.type = type
         self.registered = registered
+        self.live = live
     }
 
     /// `{"key", "type"?, "registered"?}` — `type` is left out when the
@@ -100,7 +109,10 @@ public struct PreferenceLookups: Equatable, Sendable {
 
         self.pid = pid
         self.all = seen
-            .map { PreferenceLookup(key: $0.key, suite: $0.suite, type: types[$0], registered: registered[$0]) }
+            .map {
+                PreferenceLookup(key: $0.key, suite: $0.suite, type: types[$0],
+                                 registered: registered[$0], live: watchedBySwiftUI.contains($0))
+            }
             .sorted { ($0.key, $0.suite ?? "") < ($1.key, $1.suite ?? "") }
     }
 
@@ -111,13 +123,24 @@ public struct PreferenceLookups: Equatable, Sendable {
             .sorted { $0.key < $1.key }
     }
 
-    /// What a suite read reports about the running app: `answered`, and
-    /// the keys it looks up that `stored` lacks. `nil` lookups — no running
-    /// app could answer — report `answered: false`, so a caller can tell
-    /// "nothing is unset" from "the app can't say".
+    /// Whether the running app updates at once when `key` in `suite`
+    /// changes. A key it never read, or read only once, is not live.
+    public func isLive(_ key: String, in suite: PreferenceSuite) -> Bool {
+        all.contains { $0.key == key && $0.suite == suite.name && $0.live }
+    }
+
+    /// What a suite read reports about the running app: `answered`, the
+    /// keys it looks up that `stored` lacks, and the keys it updates on at
+    /// once (`live`, stored or not). `nil` lookups — no running app could
+    /// answer — report `answered: false`, so a caller can tell "nothing is
+    /// unset" from "the app can't say".
     public static func json(_ lookups: PreferenceLookups?, unsetIn stored: Preferences, suite: PreferenceSuite) -> [String: Any] {
         guard let lookups else { return ["answered": false] }
-        return ["answered": true, "unset": lookups.unset(in: stored, suite: suite).map(\.json)]
+        return [
+            "answered": true,
+            "unset": lookups.unset(in: stored, suite: suite).map(\.json),
+            "live": lookups.all.filter { $0.suite == suite.name && $0.live }.map(\.key),
+        ]
     }
 
     /// The `NSUserDefaults` getter the app called, as the type it asked

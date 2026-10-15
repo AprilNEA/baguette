@@ -968,7 +968,7 @@ baguette defaults read --udid <udid> --bundle-id <bundle-id> [--suite <suite>] [
 Store a typed value under a key
 
 ```
-baguette defaults write --udid <udid> --bundle-id <bundle-id> --key <key> --type <type> --value <value> [--suite <suite>] [--relaunch]
+baguette defaults write --udid <udid> --bundle-id <bundle-id> --key <key> --type <type> --value <value> [--suite <suite>] [--relaunch] [--relaunch-if-needed]
 ```
 
 | Flag | Required | Default | Description |
@@ -979,14 +979,15 @@ baguette defaults write --udid <udid> --bundle-id <bundle-id> --key <key> --type
 | `--key` | yes |  | The key to store under |
 | `--type` | yes |  | The value's type: bool \| int \| float \| string \| date \| data \| plist. plist takes an XML fragment, for arrays and dictionaries One of: bool, int, float, string, date, data, plist. |
 | `--value` | yes |  | The value, e.g. false, 3, 1.5, 2026-01-02T03:04:05Z, base64 data, or <array>…</array> |
-| `--relaunch` |  |  | Quit the app before writing and launch it after, so it starts from the new value |
+| `--relaunch` |  |  | Quit the app before the change and launch it after, so it starts from the new value |
+| `--relaunch-if-needed` |  |  | Relaunch only if the running app wouldn't see the change: it read the key once rather than watching it |
 
 ### baguette defaults delete
 
 Remove a key, leaving every other preference alone
 
 ```
-baguette defaults delete --udid <udid> --bundle-id <bundle-id> --key <key> [--suite <suite>] [--relaunch]
+baguette defaults delete --udid <udid> --bundle-id <bundle-id> --key <key> [--suite <suite>] [--relaunch] [--relaunch-if-needed]
 ```
 
 | Flag | Required | Default | Description |
@@ -995,7 +996,8 @@ baguette defaults delete --udid <udid> --bundle-id <bundle-id> --key <key> [--su
 | `--bundle-id` | yes |  | The app's bundle identifier |
 | `--suite` |  |  | An App Group suite (the group identifier) instead of the app's standard defaults |
 | `--key` | yes |  | The key to remove |
-| `--relaunch` |  |  | Quit the app before removing and launch it after |
+| `--relaunch` |  |  | Quit the app before the change and launch it after, so it starts from the new value |
+| `--relaunch-if-needed` |  |  | Relaunch only if the running app wouldn't see the change: it read the key once rather than watching it |
 
 ### baguette defaults export
 
@@ -1017,7 +1019,7 @@ baguette defaults export --udid <udid> --bundle-id <bundle-id> [--suite <suite>]
 Write every value from a `defaults export` file, leaving other keys alone
 
 ```
-baguette defaults import --udid <udid> --bundle-id <bundle-id> --file <file> [--suite <suite>] [--relaunch]
+baguette defaults import --udid <udid> --bundle-id <bundle-id> --file <file> [--suite <suite>] [--relaunch] [--relaunch-if-needed]
 ```
 
 | Flag | Required | Default | Description |
@@ -1026,4 +1028,5 @@ baguette defaults import --udid <udid> --bundle-id <bundle-id> --file <file> [--
 | `--bundle-id` | yes |  | The app's bundle identifier |
 | `--suite` |  |  | An App Group suite (the group identifier) instead of the app's standard defaults |
 | `--file` | yes |  | A `defaults export` file, or a JSON map of typed values; - reads stdin |
-| `--relaunch` |  |  | Quit the app before the import and launch it once after |
+| `--relaunch` |  |  | Quit the app before the change and launch it after, so it starts from the new value |
+| `--relaunch-if-needed` |  |  | Relaunch only if the running app wouldn't see the change: it read the key once rather than watching it |

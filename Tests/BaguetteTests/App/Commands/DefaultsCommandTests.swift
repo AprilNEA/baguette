@@ -44,7 +44,23 @@ struct DefaultsCommandTests {
             "--udid", "U", "--bundle-id", "com.x", "--key", "n", "--type", "int", "--value", "3",
             "--relaunch",
         ])
-        #expect(try cmd.edit().relaunch)
+        #expect(try cmd.edit().relaunch == .always)
+    }
+
+    @Test func `should relaunch around a write only when the running app needs it when asked to`() throws {
+        let cmd = try DefaultsCommand.Write.parse([
+            "--udid", "U", "--bundle-id", "com.x", "--key", "n", "--type", "int", "--value", "3",
+            "--relaunch-if-needed",
+        ])
+        #expect(try cmd.edit().relaunch == .whenNeeded)
+    }
+
+    @Test func `should refuse to relaunch both always and only when needed`() {
+        #expect(throws: (any Error).self) {
+            try DefaultsCommand.Delete.parse([
+                "--udid", "U", "--bundle-id", "com.x", "--key", "n", "--relaunch", "--relaunch-if-needed",
+            ])
+        }
     }
 
     @Test func `should refuse a write whose value is not of its type`() throws {
@@ -139,7 +155,7 @@ struct DefaultsCommandTests {
         #expect(restore == PreferenceImport(
             suite: try PreferenceSuite(bundleID: "com.y"),
             preferences: Preferences(values: ["seen": .bool(false)]),
-            relaunch: true
+            relaunch: .always
         ))
     }
 }

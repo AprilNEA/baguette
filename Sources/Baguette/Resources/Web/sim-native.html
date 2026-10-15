@@ -1365,6 +1365,23 @@
     grid-column: 1 / -1; grid-row: 2; justify-content: stretch; padding-bottom: 8px;
   }
   #simNativeView .defaults-host .df-pick-type { flex: 0 0 76px; width: 76px; }
+  /* Live: the running app watches this key (@AppStorage), so a change
+     reaches it without a relaunch. A dot, not a word, so the key keeps
+     its width. */
+  #simNativeView .defaults-host .df-live-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--nv-accent); margin: 0 6px 1px 0; vertical-align: middle;
+  }
+  #simNativeView .defaults-host .df-filter { margin-bottom: 10px; }
+  /* Monitor: a value the app itself just wrote fades in from a tint. */
+  #simNativeView .defaults-host .df-flash { animation: df-flash 1.6s ease-out; }
+  @keyframes df-flash {
+    from { background: color-mix(in srgb, var(--nv-accent) 22%, transparent); }
+    to   { background: transparent; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #simNativeView .defaults-host .df-flash { animation: none; outline: 1px solid var(--nv-accent); }
+  }
   #simNativeView .defaults-host .df-discover {
     display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 2px 0 4px;
   }

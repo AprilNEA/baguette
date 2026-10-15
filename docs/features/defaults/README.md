@@ -29,9 +29,11 @@ baguette defaults read   --udid <UDID> --bundle-id com.example.app \
 ```
 
 In `baguette serve`'s focus page, the toolbar's Defaults button (in the
-Inspect group) opens a card that does the same: pick an app and a suite, edit
-each value in place, add or delete keys, export or import a set, with
-"Relaunch app after each change" on by default.
+Inspect group) opens a card that does the same: pick an app and a suite, filter
+by key or type, edit each value in place, add or delete keys, export or import
+a set. While it's open it re-reads every 2 s, so a value the app writes itself
+shows up and flashes. "Relaunch app when it won't see a change" is on by
+default: see [Live or relaunch](#live-or-relaunch).
 
 ## Workflows
 
@@ -73,6 +75,23 @@ these are the **Not set** rows, each marked `app` (its value is in the app's
 code, which no one outside the app can see) or `reg` (a `register(defaults:)`
 fallback, shown).
 
+## Live or relaunch
+
+Whether the running app sees a change depends on how it reads the key
+(measured on Unveil, iOS 27.0):
+
+| the app… | example | sees the change |
+|---|---|---|
+| **watches** the key: `@AppStorage`, KVO, Combine `publisher(for:)` | `@AppStorage("theme")` | at once, in place: same process, same screen |
+| reads it **when a screen is built** | a view model's `init` | when that screen is opened again |
+| reads it **once at launch** | an onboarding flag in `App.init` | only after a relaunch |
+
+`--relaunch-if-needed` (the card's default) asks the running app: a key it
+watches (a live key, marked ● in the card) is written in place, and anything
+else gets a quit → write → launch, since from outside the second and third
+rows look the same. `--relaunch` always relaunches; neither flag never does.
+Each edit answers `relaunched` so you know which happened.
+
 **Check a key, not just a value.** `read --key k --json` answers
 `{"key":"k","present":false}` for a key that was never stored and
 `{"key":"k","present":true,"type":"bool","value":false}` for a stored `false`.
@@ -98,17 +117,19 @@ can't tell `1` from `1.0`.
 ```
 GET    /simulators/<UDID>/defaults.json?bundleId=com.x[&suite=group.x][&key=k]
        → {"bundleId":"com.x","values":{"seen":{"type":"bool","value":false}},
-          "lookups":{"answered":true,"unset":[{"key":"theme","type":"string"},
+          "lookups":{"answered":true,"live":["theme"],
+                     "unset":[{"key":"theme","type":"string"},
                                               {"key":"volume","type":"float","registered":{"type":"float","value":0.5}}]}}
        → {"key":"k","present":false}                    (with &key=)
 POST   /simulators/<UDID>/defaults
-       {"bundleId":"com.x","suite":"group.x"?,"key":"seen","type":"bool","value":false,"relaunch":true?}
-       → {"ok":true}
+       {"bundleId":"com.x","suite":"group.x"?,"key":"seen","type":"bool","value":false,
+        "relaunch":true|false|"whenNeeded"?}
+       → {"ok":true,"relaunched":false}
 POST   /simulators/<UDID>/defaults
        {"bundleId":"com.x","values":{…an export's values…},"relaunch":true?}
-       → {"ok":true,"written":3}
-DELETE /simulators/<UDID>/defaults?bundleId=com.x[&suite=group.x]&key=seen[&relaunch=1]
-       → {"ok":true,"removed":true}
+       → {"ok":true,"relaunched":false,"written":3}
+DELETE /simulators/<UDID>/defaults?bundleId=com.x[&suite=group.x]&key=seen[&relaunch=1|whenNeeded]
+       → {"ok":true,"relaunched":false,"removed":true}
 ```
 
 The card also uses:
@@ -132,10 +153,10 @@ capability reaches these routes.
 
 ## Gotchas
 
-- **A running app may not see a write.** It keeps its own in-memory copy of
-  `UserDefaults`, and its next save can write the old value back. A read that
+- **A running app may not see a write** to a key it read once. A read that
   shows your value proves it's on disk, not that the app saw it. Use
-  `--relaunch` (quit → write → launch). Without it the app is left alone.
+  `--relaunch-if-needed`, or `--relaunch` to be sure. Without either the app is
+  left alone.
 - **`--relaunch` launches the app even if it wasn't running.** If the write
   fails, the app stays quit, so a running app never hides the failure.
 - **The simulator must be booted.** Reads and writes go through the guest's own
