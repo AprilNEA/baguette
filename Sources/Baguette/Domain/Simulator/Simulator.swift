@@ -211,7 +211,7 @@ extension Simulator {
     ///
     /// One panel is the only answer on every device but a foldable,
     /// and it is answered from the profile alone. A foldable asks its
-    /// hinge — a devicectl round-trip — and takes no reading as folded,
+    /// hinge — a guest round-trip — and takes no reading as folded,
     /// which is how the device boots.
     func litPanel(in chromes: any Chromes) -> IntegratedPanel {
         guard chromes.panels(forDeviceName: deviceTypeName).contains(.secondary) else {
