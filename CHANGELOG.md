@@ -15,7 +15,7 @@ For releases prior to this changelog, see the
 
 ### Fixed
 - `baguette hinge` and `GET /simulators/:udid/hinge` read iPhone Duo's hinge again on Xcode 27.1's release build, in a custom `--device-set` and right after a fold, so streams, screenshots, taps, `describe-ui` and hinge messages follow the lit panel. → [docs](docs/features/hinge/README.md#gotchas)
-- `serve`'s live 3D stream (`/simulators/:udid/stream.3d.avcc` and `.mjpeg`) of a foldable such as iPhone Duo frees its memory when the socket closes; each connection used to leave about 30 MB behind for as long as `serve` ran.
+- `serve`'s live 3D stream (`/simulators/:udid/stream.3d.avcc` and `.mjpeg`) frees its memory when the socket closes and loads each device model once, so `serve` no longer grows with every connection: by about 30 MB for a foldable such as iPhone Duo, by a little for any model.
 
 ---
 
