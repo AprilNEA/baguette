@@ -10,6 +10,10 @@ For releases prior to this changelog, see the
 
 ## [Unreleased]
 
+---
+
+## [0.2.8] - 2026-10-20
+
 ### Added
 - `baguette notify` and the serve toolbar's bell card deliver a remote notification payload to an app, as if APNs sent it, and say what to expect (a banner needs authorization and a backgrounded app). → [docs](docs/features/notifications/README.md) ([#120](https://github.com/tddworks/baguette/pull/120))
 
@@ -124,7 +128,8 @@ For releases prior to this changelog, see the
 
 [0.1](docs/changelog/0.1.md)
 
-[Unreleased]: https://github.com/tddworks/baguette/compare/v0.2.7...HEAD
+[Unreleased]: https://github.com/tddworks/baguette/compare/v0.2.8...HEAD
+[0.2.8]: https://github.com/tddworks/baguette/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/tddworks/baguette/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/tddworks/baguette/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/tddworks/baguette/compare/v0.2.4...v0.2.5
