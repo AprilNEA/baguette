@@ -65,6 +65,24 @@ struct SimctlAppsDeliverTests {
         }
     }
 
+    @Test func `should report that the app isn't allowed notifications when the simulator says its source is not authorized`() async {
+        // Measured, iOS 27: an installed app that never asked for
+        // permission (and an app that isn't installed) both get this.
+        let (apps, _) = makeApps(
+            exitCode: 211,
+            output: "An error was encountered processing the command (domain=UNErrorDomain, code=2003):\nSimulator device failed to complete the requested operation.\nUnderlying error (domain=UNErrorDomain, code=2003):\n\tRepository could not save notification. Source is not authorized.\n"
+        )
+        await #expect(throws: AppsError.notificationsNotAllowed(app: "com.example.app")) {
+            try await apps.deliver(note)
+        }
+    }
+
+    @Test func `should tell the developer how to let an app receive notifications`() {
+        #expect(AppsError.notificationsNotAllowed(app: "com.example.app").description
+            == "com.example.app isn't allowed to receive notifications: it must ask with "
+            + "UNUserNotificationCenter.requestAuthorization and be allowed (or it isn't installed)")
+    }
+
     @Test func `should name the exit status when simctl refuses a delivery without saying why`() {
         #expect(AppsError.deliverFailed(status: 22, message: "").description == "xcrun simctl push exited 22")
     }

@@ -66,6 +66,12 @@ struct NotifyRoutesTests {
         #expect(outcome == .unknownDevice)
     }
 
+    @Test func `should report that the app isn't allowed notifications`() async {
+        let (simulators, _) = host(deliverError: .notificationsNotAllowed(app: "com.example.app"))
+        let outcome = await Server.notify(udid: "U", app: "com.example.app", payload: order, simulators: simulators)
+        #expect(outcome == .notAllowed(AppsError.notificationsNotAllowed(app: "com.example.app").description))
+    }
+
     @Test func `should report a refused delivery in simctl's own words`() async {
         let (simulators, _) = host(deliverError: .deliverFailed(status: 22, message: "Unable to lookup app"))
         let outcome = await Server.notify(udid: "U", app: "com.example.app", payload: order, simulators: simulators)

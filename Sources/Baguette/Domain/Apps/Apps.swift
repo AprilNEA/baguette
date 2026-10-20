@@ -65,6 +65,10 @@ enum AppsError: Error, Equatable, CustomStringConvertible {
     case noAppInArchive
     case openFailed(status: Int32)
     case deliverFailed(status: Int32, message: String)
+    /// The simulator refused a notification because the app isn't a
+    /// notification source it will accept: it never asked for (or wasn't
+    /// granted) permission — or isn't installed, which reads the same.
+    case notificationsNotAllowed(app: String)
     case listFailed(status: Int32)
     case terminateFailed(status: Int32)
     case launchFailed(status: Int32)
@@ -75,6 +79,9 @@ enum AppsError: Error, Equatable, CustomStringConvertible {
             return "xcrun simctl install exited \(status)"
         case .openFailed(let status):
             return "xcrun simctl openurl exited \(status)"
+        case .notificationsNotAllowed(let app):
+            return "\(app) isn't allowed to receive notifications: it must ask with "
+                + "UNUserNotificationCenter.requestAuthorization and be allowed (or it isn't installed)"
         case .deliverFailed(let status, let message):
             return message.isEmpty
                 ? "xcrun simctl push exited \(status)"

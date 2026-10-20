@@ -36,6 +36,8 @@ extension Server {
                 return Self.pluginError(reason.description, status: .badRequest)
             case .unknownDevice:
                 return Self.pluginError("unknown udid: \(Self.udidParam(r))", status: .notFound)
+            case .notAllowed(let message):
+                return Self.pluginError(message, status: .conflict)
             case .deliverFailed(let message):
                 return Self.pluginError(message, status: .internalServerError)
             }
@@ -47,6 +49,8 @@ extension Server {
         case delivered(RemoteNotification)
         case badPayload(RemoteNotificationError)
         case unknownDevice
+        /// The app's notification permission, not a server fault.
+        case notAllowed(String)
         case deliverFailed(String)
     }
 
@@ -72,6 +76,9 @@ extension Server {
         }
         do {
             try await notification.deliver(to: sim.apps())
+        } catch let refusal as AppsError {
+            if case .notificationsNotAllowed = refusal { return .notAllowed(refusal.description) }
+            return .deliverFailed(refusal.description)
         } catch {
             return .deliverFailed(String(describing: error))
         }

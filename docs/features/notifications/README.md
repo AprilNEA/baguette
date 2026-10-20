@@ -84,7 +84,8 @@ POST /simulators/<UDID>/notify?bundleId=com.example.app     body: the payload
   → {"ok":true,"app":"com.example.app","presentation":{…},"expectation":"Delivered: …"}
     400 malformed payload (the reason, e.g. payload needs an "aps" object)
     404 unknown udid
-    500 simctl refused it (simctl's own message)
+    409 the app isn't allowed notifications (see Gotchas)
+    500 simctl refused it for another reason (simctl's own message)
 ```
 
 The route serves the browser only (same trust check as the other cards). It
@@ -94,16 +95,17 @@ isn't a plugin capability.
 
 - **Authorization comes first.** The app must have asked for, and been
   granted, notification permission (`UNUserNotificationCenter.requestAuthorization`).
-  Otherwise delivery still succeeds but nothing appears. Accept the system
-  prompt once with `tap`; `simctl privacy` has no notifications service to
-  grant it ahead of time.
+  An app that never asked is refused by the simulator ("Source is not
+  authorized", `UNErrorDomain` 2003): `notify` says so in one line, exits 1,
+  and the route answers 409. Launch the app, accept its prompt once (`tap`
+  works), then deliver again. `simctl privacy` has no notifications service
+  to grant it ahead of time. An app that isn't installed gets the same
+  refusal.
 - **Foreground apps get no banner by default.** Background the app first
   (step 1), or have your app present foreground notifications.
 - **Payloads are checked before delivery**, against simctl's own rules: a
   top-level JSON object, an `aps` object, and 4096 bytes at most. Each
   failure is named precisely (exit 1 / HTTP 400).
-- **An app that isn't installed** is refused by the simulator (`UNErrorDomain`
-  2003, "Source is not authorized"). The error passes simctl's text through.
 - **Remote notifications only.** VoIP, complication and File Provider pushes
   aren't supported by the simulator.
 - **iOS only**, on a booted device.

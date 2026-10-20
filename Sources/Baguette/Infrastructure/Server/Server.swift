@@ -1827,7 +1827,7 @@ struct Server: Sendable {
             // `openFailed` / `listFailed` / the lifecycle cases can't reach an upload, but the
             // switch has to name them: the compiler is the only thing
             // that will notice when a new `AppsError` case does.
-            case .installFailed, .openFailed, .deliverFailed, .listFailed, .terminateFailed, .launchFailed:
+            case .installFailed, .openFailed, .deliverFailed, .notificationsNotAllowed, .listFailed, .terminateFailed, .launchFailed:
                 return .dispatchFailed
             }
         } catch {
