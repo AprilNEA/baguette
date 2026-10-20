@@ -41,12 +41,14 @@ final class RenderedFoldable: DeviceFrames, @unchecked Sendable {
         lock.withLock { FoldablePose(hingeDegrees: hingeDegrees) }
     }
 
-    private let onPose: @Sendable () -> Void
+    private let onPose: @Sendable (FoldablePose) -> Void
 
-    /// `onPose` runs after each hinge sample has posed the scene.
+    /// `onPose` runs after each hinge sample has posed the scene, with
+    /// the pose it now stands at — so a listener never needs to hold the
+    /// book to read it (that cycle kept a closed stream's scene alive).
     init(
         unfolded: any Screen, cover: any Screen, hinge: any Hinge, scene: any DeviceScene,
-        fps: Int? = nil, onPose: @escaping @Sendable () -> Void = {}
+        fps: Int? = nil, onPose: @escaping @Sendable (FoldablePose) -> Void = { _ in }
     ) {
         self.unfolded = unfolded
         self.cover = cover
@@ -94,7 +96,7 @@ final class RenderedFoldable: DeviceFrames, @unchecked Sendable {
                 self.isPosed = true
             }
             self.scene.update(hingeDegrees: angle.degrees)
-            self.onPose()
+            self.onPose(FoldablePose(hingeDegrees: angle.degrees))
             self.refresh()
         }
         lock.withLock { self.watch = watch }
