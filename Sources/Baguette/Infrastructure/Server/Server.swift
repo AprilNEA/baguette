@@ -182,6 +182,7 @@ struct Server: Sendable {
         registerInterfaceRoutes(on: router, rejectUntrustedBrowser: rejectUntrustedBrowser)
         registerCompanionScreenRoutes(on: router, rejectUntrustedBrowser: rejectUntrustedBrowser)
         registerDeepLinkRoutes(on: router, rejectUntrustedBrowser: rejectUntrustedBrowser)
+        registerNotifyRoutes(on: router, rejectUntrustedBrowser: rejectUntrustedBrowser)
         registerDefaultsRoutes(on: router, rejectUntrustedBrowser: rejectUntrustedBrowser)
         registerDeviceTwinRoutes(
             on: router,
@@ -1826,7 +1827,7 @@ struct Server: Sendable {
             // `openFailed` / `listFailed` / the lifecycle cases can't reach an upload, but the
             // switch has to name them: the compiler is the only thing
             // that will notice when a new `AppsError` case does.
-            case .installFailed, .openFailed, .listFailed, .terminateFailed, .launchFailed:
+            case .installFailed, .openFailed, .deliverFailed, .notificationsNotAllowed, .listFailed, .terminateFailed, .launchFailed:
                 return .dispatchFailed
             }
         } catch {

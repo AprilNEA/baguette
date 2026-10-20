@@ -209,6 +209,14 @@ Wired (use freely):
   is a pure ferry (no keystroke). Browser copy targets the machine
   running baguette (local-dev happy path). Needs a booted device.
   See [`docs/features/paste/README.md`](../../docs/features/paste/README.md).
+- `notify` — deliver a remote notification (APNs payload JSON) to an
+  app: `baguette notify --udid <X> --bundle-id <id> (--file n.json |
+  --stdin) [--json]`; HTTP `POST /simulators/<X>/notify?bundleId=`.
+  Success = the simulator accepted it, not that a banner showed: the
+  reply's `expectation` says what to look for. Background the app
+  first (`press --button home`), then find the banner in `describe-ui`
+  and `tap` it. Not a gesture-wire verb. See
+  [`docs/features/notifications/README.md`](../../docs/features/notifications/README.md).
 - `describe-ui` — dump the on-screen accessibility tree as JSON
   (per-node `role`, `label`, `value`, `identifier`, `frame` in
   device points, recursive `children`). CLI:
