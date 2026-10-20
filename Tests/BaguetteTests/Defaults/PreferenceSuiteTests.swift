@@ -14,6 +14,12 @@ struct PreferenceSuiteTests {
             == ["simctl", "get_app_container", "U", "com.example.app", "data"])
     }
 
+    @Test func `should look for preferences inside the device's custom device set when it lives in one`() throws {
+        let suite = try PreferenceSuite(bundleID: "com.example.app")
+        #expect(suite.containerArguments(udid: "U", deviceSetPath: "/custom set")
+            == ["simctl", "--set", "/custom set", "get_app_container", "U", "com.example.app", "data"])
+    }
+
     @Test func `should look for a suite among the app's App Group containers`() throws {
         // simctl's own `get_app_container … <group id>` exits 117 even for
         // a group the app has (Xcode 27), so the suite is found in the

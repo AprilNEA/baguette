@@ -137,11 +137,11 @@ struct RemoteNotification: Equatable, Sendable {
         return encoded ?? #"{"ok":true}"#
     }
 
-    /// The argv tail handed to `xcrun simctl push <udid> <app> <file>`.
+    /// The argv tail handed to `xcrun simctl [--set <set>] push <udid> <app> <file>`.
     /// The app is always passed explicitly, so simctl never second-guesses
     /// the addressee resolved above.
-    func deliverArguments(udid: String, payloadFile: URL) -> [String] {
-        ["simctl", "push", udid, app, payloadFile.path]
+    func deliverArguments(udid: String, deviceSetPath: String? = nil, payloadFile: URL) -> [String] {
+        ["simctl"] + (deviceSetPath.map { ["--set", $0] } ?? []) + ["push", udid, app, payloadFile.path]
     }
 
     /// Tell-don't-ask: the notification is delivered to the apps on the

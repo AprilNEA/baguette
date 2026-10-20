@@ -31,6 +31,12 @@ protocol Simulator: Sendable {
     /// did not populate are `nil`.
     var metadata: SimulatorMetadata { get }
 
+    /// The custom device set this simulator lives in (`--device-set`), or
+    /// `nil` for Xcode's default set. simctl only looks in the default set
+    /// unless told otherwise, so every `simctl` call naming this simulator
+    /// passes it as `--set`.
+    var deviceSetPath: String? { get }
+
     func boot() throws
     func shutdown() throws
 

@@ -14,7 +14,7 @@ struct SimctlAppsLifecycleTests {
     }
 
     private func makeApps(
-        exitCode: Int32 = 0, libraries: InjectedDylibs = InjectedDylibs(paths: [])
+        exitCode: Int32 = 0, libraries: InjectedDylibs = InjectedDylibs(paths: []), deviceSetPath: String? = nil
     ) -> (SimctlApps, Captures) {
         let sub = MockSubprocess()
         let captures = Captures()
@@ -25,7 +25,9 @@ struct SimctlAppsLifecycleTests {
             captures.arguments = args
             onExit(exitCode)
         }
-        return (SimctlApps(udid: "U", subprocess: sub, libraries: { libraries }), captures)
+        return (
+            SimctlApps(udid: "U", deviceSetPath: deviceSetPath, subprocess: sub, libraries: { libraries }), captures
+        )
     }
 
     @Test func `should quit a running app through simctl terminate`() async throws {
@@ -65,6 +67,24 @@ struct SimctlAppsLifecycleTests {
         #expect(captures.arguments == [
             "SIMCTL_CHILD_DYLD_INSERT_LIBRARIES=/s/builds/a/VirtualMotion.dylib:/s/builds/a/DefaultsLookups.dylib",
             "/usr/bin/xcrun", "simctl", "launch", "U", "com.example.app",
+        ])
+    }
+
+    @Test func `should quit and launch an app inside the device's custom device set when it lives in one`() async throws {
+        let (apps, captures) = makeApps(deviceSetPath: "/custom set")
+        try await apps.terminate(bundleID: "com.example.app")
+        #expect(captures.arguments == ["simctl", "--set", "/custom set", "terminate", "U", "com.example.app"])
+        try await apps.launch(bundleID: "com.example.app")
+        #expect(captures.arguments == ["simctl", "--set", "/custom set", "launch", "U", "com.example.app"])
+    }
+
+    @Test func `should launch an app with its libraries inside the device's custom device set when it lives in one`() async throws {
+        let (apps, captures) = makeApps(
+            libraries: InjectedDylibs(paths: ["/s/builds/a/DefaultsLookups.dylib"]), deviceSetPath: "/custom set")
+        try await apps.launch(bundleID: "com.example.app")
+        #expect(captures.arguments == [
+            "SIMCTL_CHILD_DYLD_INSERT_LIBRARIES=/s/builds/a/DefaultsLookups.dylib",
+            "/usr/bin/xcrun", "simctl", "--set", "/custom set", "launch", "U", "com.example.app",
         ])
     }
 

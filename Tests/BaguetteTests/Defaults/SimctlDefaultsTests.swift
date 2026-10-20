@@ -23,7 +23,8 @@ struct SimctlDefaultsTests {
         containerExit: Int32 = 0,
         container: String = SimctlDefaultsTests.container + "\n",
         defaultsExit: Int32 = 0,
-        defaultsOutput: String = ""
+        defaultsOutput: String = "",
+        deviceSetPath: String? = nil
     ) -> (SimctlDefaults, Calls) {
         let sub = MockSubprocess()
         let calls = Calls()
@@ -31,7 +32,7 @@ struct SimctlDefaultsTests {
             executable: .any, arguments: .any, onBytes: .any, onExit: .any
         ).willProduce { _, args, onBytes, onExit in
             calls.argv.append(args)
-            if args[1] == "get_app_container" {
+            if args.contains("get_app_container") {
                 if containerExit == 0 { onBytes(Data(container.utf8)) }
                 onExit(containerExit)
             } else {
@@ -39,7 +40,7 @@ struct SimctlDefaultsTests {
                 onExit(defaultsExit)
             }
         }
-        return (SimctlDefaults(udid: "U", subprocess: sub), calls)
+        return (SimctlDefaults(udid: "U", deviceSetPath: deviceSetPath, subprocess: sub), calls)
     }
 
     private static let app = try! PreferenceSuite(bundleID: "com.example.app")
@@ -57,6 +58,23 @@ struct SimctlDefaultsTests {
             ["simctl", "get_app_container", "U", "com.example.app", "data"],
             ["simctl", "spawn", "U", "defaults", "export", Self.plist, "-"],
         ])
+    }
+
+    @Test func `should edit the app's preferences inside the device's custom device set when it lives in one`() async throws {
+        let (defaults, calls) = makeDefaults(deviceSetPath: "/custom set")
+
+        try await defaults.write(.integer(3), forKey: "launches", in: Self.app)
+
+        #expect(calls.argv == [
+            ["simctl", "--set", "/custom set", "get_app_container", "U", "com.example.app", "data"],
+            ["simctl", "--set", "/custom set", "spawn", "U", "defaults", "write", Self.plist, "launches", "<integer>3</integer>"],
+        ])
+    }
+
+    @Test func `should list an app's App Groups inside the device's custom device set when it lives in one`() async throws {
+        let (defaults, calls) = makeDefaults(container: "group.a\t/sim/G1\n", deviceSetPath: "/custom set")
+        #expect(try await defaults.groups(of: "com.example.app") == ["group.a"])
+        #expect(calls.argv == [["simctl", "--set", "/custom set", "get_app_container", "U", "com.example.app", "groups"]])
     }
 
     @Test func `should store a value as a typed plist fragment`() async throws {

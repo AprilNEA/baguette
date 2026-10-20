@@ -14,6 +14,7 @@ For releases prior to this changelog, see the
 - `baguette notify` and the serve toolbar's bell card deliver a remote notification payload to an app, as if APNs sent it, and say what to expect (a banner needs authorization and a backgrounded app). → [docs](docs/features/notifications/README.md) ([#120](https://github.com/tddworks/baguette/pull/120))
 
 ### Fixed
+- `--device-set` now reaches every `simctl` call, so shake, status bar, location, appearance, clipboard, logs, apps, deep links, `notify`, photos, defaults, motion, network, camera and `heal` work on a device in a custom set instead of failing with `Invalid device`.
 - `baguette hinge` and `GET /simulators/:udid/hinge` read iPhone Duo's hinge again on Xcode 27.1's release build, in a custom `--device-set` and right after a fold, so streams, screenshots, taps, `describe-ui` and hinge messages follow the lit panel. → [docs](docs/features/hinge/README.md#gotchas)
 
 ---
