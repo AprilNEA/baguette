@@ -60,6 +60,7 @@
   let locationPanel = null;  // LocationPanel — simctl location map picker
   let networkPanel = null;   // NetworkPanel — latency / bandwidth / loss / offline
   let defaultsPanel = null;  // DefaultsPanel — an app's typed UserDefaults
+  let notifyPanel = null;    // NotifyPanel — deliver a remote notification
   let networkArmedTimer = null; // keeps the toolbar's armed dot honest while the card is shut
   let render3DPanel = null;  // Sim3DPanel — live SceneKit stream + inspector
   let lastPaintedSize = { w: 0, h: 0 };
@@ -1774,6 +1775,7 @@
       members: [
         { id: 'nativeStatusBarToggle', label: 'Status bar', role: 'state' },
         { id: 'nativeLocationToggle', label: 'Location', role: 'state' },
+        { id: 'nativeNotifyToggle', label: 'Notification', role: 'state' },
         { id: 'nativeCameraToggle', label: 'Camera', role: 'state' },
       ],
     },
@@ -2293,6 +2295,7 @@
     window.__nativeToggleLocation = () => toggleLocation();
     window.__nativeToggleNetwork = () => toggleNetwork();
     window.__nativeToggleDefaults = () => toggleDefaults();
+    window.__nativeToggleNotify = () => toggleNotify();
     window.__nativeToggle3D = () => toggle3D();
     window.__nativeEnterHandheld = () => enterHandheld();
     window.__nativeHandheldMenu = (open) => setHandheldMenu(!!open);
@@ -2518,6 +2521,31 @@
     }
   }
 
+  // Notify card — same lazy-mount pattern as the network card. Closing it
+  // keeps the panel mounted, so the app and payload survive a reopen.
+  function toggleNotify() {
+    const view = document.getElementById('simNativeView');
+    const host = document.getElementById('nativeNotifyHost');
+    const btn  = document.getElementById('nativeNotifyToggle');
+    const sheet = document.getElementById('nativeNotifySheet');
+    const open = view && view.getAttribute('data-notify') === 'open';
+    if (!view || !host) return;
+    if (open) {
+      view.removeAttribute('data-notify');
+      if (btn) btn.classList.remove('active');
+      if (sheet) { sheet.setAttribute('aria-hidden', 'true'); sheet.inert = true; }
+    } else {
+      view.setAttribute('data-notify', 'open');
+      if (btn) btn.classList.add('active');
+      if (sheet) { sheet.setAttribute('aria-hidden', 'false'); sheet.inert = false; }
+      if (!notifyPanel && window.NotifyPanel && udid) {
+        host.innerHTML = '';
+        notifyPanel = new window.NotifyPanel();
+        notifyPanel.attach(host, udid);
+      }
+    }
+  }
+
   // Defaults card — same lazy-mount pattern as the network card. Reopening
   // re-reads the device, since the app under test may have rewritten its
   // own preferences while the card was shut.
@@ -2717,6 +2745,7 @@
       try { if (statusBarPanel) statusBarPanel.detach(); } catch (_) { /* ignore */ }
       try { if (locationPanel) locationPanel.detach(); } catch (_) { /* ignore */ }
       try { if (networkPanel) networkPanel.detach(); } catch (_) { /* ignore */ }
+      try { if (notifyPanel) notifyPanel.detach(); } catch (_) { /* ignore */ }
       try { if (networkArmedTimer) clearInterval(networkArmedTimer); } catch (_) { /* ignore */ }
       try { if (render3DPanel) render3DPanel.detach(); } catch (_) { /* ignore */ }
     });

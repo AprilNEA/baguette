@@ -10,6 +10,9 @@ For releases prior to this changelog, see the
 
 ## [Unreleased]
 
+### Added
+- `baguette notify` and the serve toolbar's bell card deliver a remote notification payload to an app, as if APNs sent it, and say what to expect (a banner needs authorization and a backgrounded app). → [docs](docs/features/notifications/README.md) ([#94](https://github.com/tddworks/baguette/issues/94))
+
 ### Fixed
 - `baguette hinge` and `GET /simulators/:udid/hinge` read iPhone Duo's hinge again on Xcode 27.1's release build, in a custom `--device-set` and right after a fold, so streams, screenshots, taps, `describe-ui` and hinge messages follow the lit panel. → [docs](docs/features/hinge/README.md#gotchas)
 

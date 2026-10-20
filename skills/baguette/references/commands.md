@@ -8,7 +8,7 @@ Every `baguette` command and flag, generated from the binary. For how to use a f
 
 **Exit codes:** `0` on success, `1` on any error, `3` when an iPhone Duo `orientation` or `hinge` change is unconfirmed: its guest helper timed out, so the change may have landed and will not land later. Errors print `{"ok":false,"error":"…"}`, so parse stdout, not just the exit code.
 
-**Commands:** [list](#baguette-list) · [boot](#baguette-boot) · [shutdown](#baguette-shutdown) · [lifetime](#baguette-lifetime) · [input](#baguette-input) · [stream](#baguette-stream) · [tap](#baguette-tap) · [double-tap](#baguette-double-tap) · [swipe](#baguette-swipe) · [pinch](#baguette-pinch) · [pan](#baguette-pan) · [press](#baguette-press) · [key](#baguette-key) · [type](#baguette-type) · [paste](#baguette-paste) · [clipboard](#baguette-clipboard) · [chrome](#baguette-chrome) · [screenshot](#baguette-screenshot) · [record](#baguette-record) · [render-3d](#baguette-render-3d) · [describe-ui](#baguette-describe-ui) · [logs](#baguette-logs) · [serve](#baguette-serve) · [orientation](#baguette-orientation) · [hinge](#baguette-hinge) · [shake](#baguette-shake) · [status-bar](#baguette-status-bar) · [interface](#baguette-interface) · [location](#baguette-location) · [motion](#baguette-motion) · [network](#baguette-network) · [install](#baguette-install) · [add-media](#baguette-add-media) · [openurl](#baguette-openurl) · [schemes](#baguette-schemes) · [plugin](#baguette-plugin) · [bakery](#baguette-bakery) · [diag-digitizer-trackpad](#baguette-diag-digitizer-trackpad) · [heal](#baguette-heal) · [defaults](#baguette-defaults)
+**Commands:** [list](#baguette-list) · [boot](#baguette-boot) · [shutdown](#baguette-shutdown) · [lifetime](#baguette-lifetime) · [input](#baguette-input) · [stream](#baguette-stream) · [tap](#baguette-tap) · [double-tap](#baguette-double-tap) · [swipe](#baguette-swipe) · [pinch](#baguette-pinch) · [pan](#baguette-pan) · [press](#baguette-press) · [key](#baguette-key) · [type](#baguette-type) · [paste](#baguette-paste) · [clipboard](#baguette-clipboard) · [chrome](#baguette-chrome) · [screenshot](#baguette-screenshot) · [record](#baguette-record) · [render-3d](#baguette-render-3d) · [describe-ui](#baguette-describe-ui) · [logs](#baguette-logs) · [serve](#baguette-serve) · [orientation](#baguette-orientation) · [hinge](#baguette-hinge) · [shake](#baguette-shake) · [status-bar](#baguette-status-bar) · [interface](#baguette-interface) · [location](#baguette-location) · [motion](#baguette-motion) · [network](#baguette-network) · [install](#baguette-install) · [add-media](#baguette-add-media) · [openurl](#baguette-openurl) · [notify](#baguette-notify) · [schemes](#baguette-schemes) · [plugin](#baguette-plugin) · [bakery](#baguette-bakery) · [diag-digitizer-trackpad](#baguette-diag-digitizer-trackpad) · [heal](#baguette-heal) · [defaults](#baguette-defaults)
 
 ## baguette list
 
@@ -735,6 +735,22 @@ baguette openurl --udid <udid> <url>
 |---|---|---|---|
 | `--udid` | yes |  | Simulator UDID |
 | `<url>` | yes |  | The URL to open, e.g. myapp://profile/42 |
+
+## baguette notify
+
+Deliver a remote notification to an app on the booted simulator
+
+```
+baguette notify --udid <udid> [--bundle-id <bundle-id>] [--file <file>] [--stdin] [--json]
+```
+
+| Flag | Required | Default | Description |
+|---|---|---|---|
+| `--udid` | yes |  | Simulator UDID |
+| `--bundle-id` |  |  | The app to notify (optional when the payload has "Simulator Target Bundle") |
+| `--file` |  |  | Path to the JSON payload |
+| `--stdin` |  |  | Read the JSON payload from standard input |
+| `--json` |  |  | Emit the result as JSON on stdout |
 
 ## baguette schemes
 

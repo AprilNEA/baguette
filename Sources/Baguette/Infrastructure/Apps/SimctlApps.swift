@@ -85,6 +85,26 @@ final class SimctlApps: Apps, @unchecked Sendable {
         guard status == 0 else { throw AppsError.openFailed(status: status) }
     }
 
+    /// simctl reads the payload from a path, so it's staged in a temp
+    /// file for the one call. simctl writes its refusal ("Unable to lookup
+    /// app", "not booted") to the merged output — kept, so the caller sees
+    /// why rather than a bare status.
+    func deliver(_ notification: RemoteNotification) async throws {
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("baguette-notification-\(UUID().uuidString).json")
+        try notification.payload.write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        let (status, output) = try await capture(
+            of: xcrun, arguments: notification.deliverArguments(udid: udid, payloadFile: file)
+        )
+        guard status == 0 else {
+            let message = String(decoding: output, as: UTF8.self)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            throw AppsError.deliverFailed(status: status, message: message)
+        }
+    }
+
     func terminate(bundleID: String) async throws {
         let status = try await exitStatus(of: xcrun, arguments: ["simctl", "terminate", udid, bundleID])
         // 3 is simctl's "found nothing to terminate" (Xcode 27): the app

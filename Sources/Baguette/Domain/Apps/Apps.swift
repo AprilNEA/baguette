@@ -32,6 +32,13 @@ protocol Apps: Sendable {
     /// when simctl exits non-zero.
     func open(_ link: DeepLink) async throws
 
+    /// Deliver a remote notification to the app it's addressed to, as if
+    /// APNs had sent it. Success means the simulator accepted it — not
+    /// that a banner showed (`RemoteNotification.expectation` says what
+    /// to expect). Throws `AppsError.deliverFailed` with simctl's own
+    /// explanation when it refuses (app not installed, device not booted).
+    func deliver(_ notification: RemoteNotification) async throws
+
     /// Every app on the device, each carrying the URL schemes it
     /// answers to. Throws `AppsError.listFailed` when simctl exits
     /// non-zero; an app whose bundle can't be read still lists, with no
@@ -57,6 +64,7 @@ enum AppsError: Error, Equatable, CustomStringConvertible {
     case archiveTooLarge(bytes: Int64, limit: Int64)
     case noAppInArchive
     case openFailed(status: Int32)
+    case deliverFailed(status: Int32, message: String)
     case listFailed(status: Int32)
     case terminateFailed(status: Int32)
     case launchFailed(status: Int32)
@@ -67,6 +75,10 @@ enum AppsError: Error, Equatable, CustomStringConvertible {
             return "xcrun simctl install exited \(status)"
         case .openFailed(let status):
             return "xcrun simctl openurl exited \(status)"
+        case .deliverFailed(let status, let message):
+            return message.isEmpty
+                ? "xcrun simctl push exited \(status)"
+                : "xcrun simctl push exited \(status): \(message)"
         case .listFailed(let status):
             return "xcrun simctl listapps exited \(status)"
         case .terminateFailed(let status):

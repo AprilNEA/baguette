@@ -51,6 +51,7 @@ The server trusts only loopback `Host` / `Origin` values, so a request through a
 | `POST` | `/simulators/:udid/camera-source?name=` | stage an image / video for the camera | [camera](features/camera/README.md) |
 | `POST` | `/simulators/:udid/openurl?url=` | open a deep link | [deep-links](features/deep-links/README.md) |
 | `GET` | `/simulators/:udid/schemes.json?q=` | URL schemes the device's apps registered | [deep-links](features/deep-links/README.md) |
+| `POST` | `/simulators/:udid/notify?bundleId=` | deliver a remote notification (body: the payload) | [notifications](features/notifications/README.md) |
 | `WS` | `/simulators/:udid/stream?format=mjpeg\|avcc` | live frames + gestures + stream control (`display=carplay`, `panel=`) | [below](#one-websocket-per-stream) |
 | `WS` | `/simulators/:udid/stream.3d.mjpeg`, `.avcc` | live 3D stage | [3d-rendering](features/3d-rendering/README.md) |
 | `WS` | `/simulators/:udid/logs?level=&style=&predicate=&bundleId=` | live unified log | [logs](features/logs/README.md) |
