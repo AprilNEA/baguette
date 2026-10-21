@@ -10,6 +10,10 @@ For releases prior to this changelog, see the
 
 ## [Unreleased]
 
+---
+
+## [0.2.9] - 2026-10-21
+
 ### Fixed
 - `--device-set` now reaches every `simctl` call, so shake, status bar, location, appearance, clipboard, logs, apps, deep links, `notify`, photos, defaults, motion, network, camera and `heal` work on a device in a custom set instead of failing with `Invalid device`. ([#122](https://github.com/tddworks/baguette/pull/122))
 - `serve`'s live 3D stream (`/simulators/:udid/stream.3d.avcc` and `.mjpeg`) frees its memory when the socket closes and loads each device model once, so `serve` no longer grows with every connection (by up to 30 MB for iPhone Duo). → [docs](docs/features/3d-rendering/design.md) ([#123](https://github.com/tddworks/baguette/pull/123))
@@ -132,7 +136,8 @@ For releases prior to this changelog, see the
 
 [0.1](docs/changelog/0.1.md)
 
-[Unreleased]: https://github.com/tddworks/baguette/compare/v0.2.8...HEAD
+[Unreleased]: https://github.com/tddworks/baguette/compare/v0.2.9...HEAD
+[0.2.9]: https://github.com/tddworks/baguette/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/tddworks/baguette/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/tddworks/baguette/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/tddworks/baguette/compare/v0.2.5...v0.2.6
