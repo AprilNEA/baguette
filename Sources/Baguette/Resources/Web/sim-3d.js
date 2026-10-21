@@ -496,6 +496,9 @@
     this.stop();
     if (this.interactiveScreen) this.interactiveScreen.detach();
     this.interactiveScreen = null;
+    // Its paste listener is on the document, which outlives the stage.
+    if (this.keyboard) this.keyboard.detach();
+    this.keyboard = null;
     if (this.host) this.host.innerHTML = '';
     if (this.stage) this.stage.innerHTML = '';
     this.host = null;

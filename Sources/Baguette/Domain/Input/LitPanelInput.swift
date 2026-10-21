@@ -4,12 +4,37 @@ import Foundation
 /// hinge lights. iPhone Duo's page keeps one socket while the hinge
 /// moves (the book draws both panels), so an input bound once would
 /// keep addressing a panel that has gone dark.
-struct LitPanelInput: Input {
-    let cover: any Input
-    let unfolded: any Input
-    let litPanel: @Sendable () -> IntegratedPanel
+///
+/// A finger stays on the digitizer it touched down on until it lifts:
+/// the hinge can move from outside (Device Hub, `baguette hinge`)
+/// mid-drag, and an `up` sent to the other panel would leave the first
+/// one holding a contact nobody releases.
+final class LitPanelInput: Input, @unchecked Sendable {
+    private let cover: any Input
+    private let unfolded: any Input
+    private let litPanel: @Sendable () -> IntegratedPanel
+    private let lock = NSLock()
+    private var touching: IntegratedPanel?
 
-    private var lit: any Input { litPanel() == .primary ? cover : unfolded }
+    init(cover: any Input, unfolded: any Input, litPanel: @escaping @Sendable () -> IntegratedPanel) {
+        self.cover = cover
+        self.unfolded = unfolded
+        self.litPanel = litPanel
+    }
+
+    private func input(on panel: IntegratedPanel) -> any Input { panel == .primary ? cover : unfolded }
+
+    private var lit: any Input { input(on: litPanel()) }
+
+    /// The panel a contact's phase goes to: the lit one on `down`, the
+    /// same one until `up`.
+    private func contact(_ phase: GesturePhase) -> any Input {
+        lock.lock()
+        defer { lock.unlock() }
+        let panel = (phase == .down ? nil : touching) ?? litPanel()
+        touching = phase == .up ? nil : panel
+        return input(on: panel)
+    }
 
     func tap(at point: Point, size: Size, duration: Double, edge: DeviceEdge?) -> Bool {
         lit.tap(at: point, size: size, duration: duration, edge: edge)
@@ -20,11 +45,11 @@ struct LitPanelInput: Input {
     }
 
     func touch1(phase: GesturePhase, at point: Point, size: Size, edge: DeviceEdge?) -> Bool {
-        lit.touch1(phase: phase, at: point, size: size, edge: edge)
+        contact(phase).touch1(phase: phase, at: point, size: size, edge: edge)
     }
 
     func touch2(phase: GesturePhase, first: Point, second: Point, size: Size) -> Bool {
-        lit.touch2(phase: phase, first: first, second: second, size: size)
+        contact(phase).touch2(phase: phase, first: first, second: second, size: size)
     }
 
     func button(_ button: DeviceButton, duration: Double) -> Bool {
