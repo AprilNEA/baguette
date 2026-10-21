@@ -14,7 +14,10 @@ final class LitPanelInput: Input, @unchecked Sendable {
     private let unfolded: any Input
     private let hinge: any Hinge
     private let lock = NSLock()
-    private var touching: IntegratedPanel?
+    /// The panel each contact stream went down on; a one-finger drag and
+    /// a pinch can overlap, and each keeps its own digitizer.
+    private enum Contact { case oneFinger, twoFingers }
+    private var touching: [Contact: IntegratedPanel] = [:]
 
     init(cover: any Input, unfolded: any Input, hinge: any Hinge) {
         self.cover = cover
@@ -28,11 +31,11 @@ final class LitPanelInput: Input, @unchecked Sendable {
 
     /// The panel a contact's phase goes to: the lit one on `down`, the
     /// same one until `up`.
-    private func contact(_ phase: GesturePhase) -> any Input {
+    private func contact(_ stream: Contact, _ phase: GesturePhase) -> any Input {
         lock.lock()
         defer { lock.unlock() }
-        let panel = (phase == .down ? nil : touching) ?? hinge.litPanel
-        touching = phase == .up ? nil : panel
+        let panel = (phase == .down ? nil : touching[stream]) ?? hinge.litPanel
+        touching[stream] = phase == .up ? nil : panel
         return input(on: panel)
     }
 
@@ -45,11 +48,11 @@ final class LitPanelInput: Input, @unchecked Sendable {
     }
 
     func touch1(phase: GesturePhase, at point: Point, size: Size, edge: DeviceEdge?) -> Bool {
-        contact(phase).touch1(phase: phase, at: point, size: size, edge: edge)
+        contact(.oneFinger, phase).touch1(phase: phase, at: point, size: size, edge: edge)
     }
 
     func touch2(phase: GesturePhase, first: Point, second: Point, size: Size) -> Bool {
-        contact(phase).touch2(phase: phase, first: first, second: second, size: size)
+        contact(.twoFingers, phase).touch2(phase: phase, first: first, second: second, size: size)
     }
 
     func button(_ button: DeviceButton, duration: Double) -> Bool {

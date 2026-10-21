@@ -114,4 +114,16 @@ struct LitPanelInputTests {
         verify(unfolded).touch1(phase: .any, at: .any, size: .any, edge: .any).called(2)
         verify(cover).touch1(phase: .any, at: .any, size: .any, edge: .any).called(1)
     }
+
+    @Test func `should keep a drag on its panel when a pinch ends during it and the device then folds`() {
+        let (input, cover, unfolded, fold) = make()
+        fold.lit = .secondary
+        _ = input.touch1(phase: .down, at: point, size: size, edge: nil)
+        _ = input.touch2(phase: .down, first: point, second: point, size: size)
+        _ = input.touch2(phase: .up, first: point, second: point, size: size)
+        fold.lit = .primary
+        #expect(input.touch1(phase: .up, at: point, size: size, edge: nil))
+        verify(unfolded).touch1(phase: .any, at: .any, size: .any, edge: .any).called(2)
+        verify(cover).touch1(phase: .any, at: .any, size: .any, edge: .any).called(0)
+    }
 }
