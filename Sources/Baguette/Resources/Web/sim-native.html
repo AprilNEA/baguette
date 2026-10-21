@@ -1871,12 +1871,10 @@
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
-    /* Focusable so it takes the keyboard; no ring for a click, like the
-       flat screen, but one when it was reached by Tab. */
+    /* Focusable so it takes the keyboard. No ring, like the flat screen:
+       typing is how this surface is used, so a :focus-visible ring would
+       frame the stage whenever you type; the app's own caret shows where. */
     outline: none;
-  }
-  #simNativeView .r3d-live-canvas:focus-visible {
-    outline: 2px solid var(--nv-accent); outline-offset: -2px;
   }
   #simNativeView .r3d-live-stage[data-mode="pose"] .r3d-live-canvas { cursor: grab; }
   #simNativeView .r3d-live-stage[data-mode="pose"] .r3d-live-canvas:active {
