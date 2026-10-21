@@ -196,6 +196,12 @@
     this.interactiveScreen = new window.Baguette._Screen({
       rect: { width: this.deviceSize.width, height: this.deviceSize.height },
     }, transport);
+    // Typing on the stage reaches the device as on the flat page: the
+    // canvas takes focus on click and forwards keys, paste and copy
+    // over this socket. Lives as long as this canvas does.
+    if (this.keyboard) this.keyboard.detach();
+    this.keyboard = new window.Baguette._Keyboard({}, transport);
+    this.keyboard.attach(this.canvas);
     this.setMode(this.mode);
   };
 

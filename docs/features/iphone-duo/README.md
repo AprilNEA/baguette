@@ -117,6 +117,10 @@ the page can light the nearest pose; the hardware keys send the ordinary
 - A **shut-down** Duo's page shows the flat chrome (for the Boot card); the 3D
   book appears once it's booted. The CLI's `chrome` verbs and `bezel.png` always
   serve the flat chromes.
+- **Keys ride the guest.** The Duo drops Indigo's keyboard message on either
+  panel, so `type`, `key` and the page's keyboard press keys through
+  `HingeControl`, modifiers held around each, as its hardware keys go. The
+  first keystroke after a while costs the helper's spawn (most of a second).
 - The Device Hub input heal ([device hub](../device-hub/README.md)) applies to
   the Duo like any iOS 27 device.
 
