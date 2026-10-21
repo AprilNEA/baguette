@@ -51,7 +51,7 @@ The hinge decides which is lit, and `tap`, `type`, `screenshot`, `stream`,
 
 ```bash
 baguette hinge --udid <UDID>                 # read: {"angleDegrees": 130.0}
-baguette hinge --udid <UDID> --pose open     # closed (0°) | open (130°) | flat (180°)
+baguette hinge --udid <UDID> --pose open     # unfold: open (130°, as Device Hub does) | flat (180°) | closed (0°)
 baguette hinge --udid <UDID> --angle 72      # any angle 0–180
 baguette chrome layout --udid <UDID>         # now the unfolded panel's size
 ```

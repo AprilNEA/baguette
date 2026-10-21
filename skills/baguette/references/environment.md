@@ -48,7 +48,7 @@ baguette network clear --udid <X>
 ```
 
 Exactly one of profile / custom / offline per call. Relaunch rule applies to
-starting; changing it later needs no relaunch. Only URLSession traffic is
+starting; a later `set` or `clear` takes effect at once, no relaunch. Only URLSession traffic is
 conditioned (WebSocket tasks too, except bandwidth): SDKs with their own
 sockets (ably-cocoa, Starscream) and `WKWebView` / Safari page loads are not,
 and loss is per request. HTTP: `POST|GET|DELETE /simulators/<X>/network`. See

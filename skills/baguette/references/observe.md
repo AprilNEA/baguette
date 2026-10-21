@@ -34,9 +34,25 @@ baguette describe-ui --udid <X>                  # whole accessibility tree
 baguette describe-ui --udid <X> --x 200 --y 400  # the element at a point
 ```
 
-Each node has `role`, `label`, `value`, `identifier`, `frame` and
-`children`; frames are in the same device points as `tap`, so the centre
-(`x + width/2`, `y + height/2`) goes straight into a tap. The outer `screen`
+The root is the frontmost app's node; every node has the same fields, and
+the root also carries `screen`:
+
+```json
+{"role": "AXApplication", "label": "Settings", "identifier": null, "value": null,
+ "frame": {"x": 0, "y": 0, "width": 402, "height": 874},
+ "screen": {"width": 402, "height": 874, "orientation": "portrait", "target": {…}},
+ "children": [{"role": "AXButton", "label": "Sign In", "frame": {…}, …}]}
+```
+
+Frames are in the same device points as `tap`, so an element's centre goes
+straight into one:
+
+```bash
+baguette describe-ui --udid <X> | jq -r '.. | objects | select(.label? == "Sign In")
+  | .frame | "\(.x + .width/2) \(.y + .height/2)"' | head -1
+```
+
+Match on `identifier` when the app sets one; `label` is the visible text. The outer `screen`
 object (size, orientation, lit panel) can be handed to
 `input --expected-screen`. In landscape, frames can skew; check against a
 screenshot. A field without an accessibility element may not appear.
