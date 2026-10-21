@@ -92,6 +92,63 @@ struct RenderedFoldableTests {
         #expect(screen.pose == FoldablePose(hingeDegrees: 42))
     }
 
+    @Test func `should tell whoever follows the book the pose it now stands at when the hinge moves`() throws {
+        let unfolded = MockScreen(), cover = MockScreen()
+        let hinge = MockHinge(), watch = MockHingeWatch()
+        let scene = MockDeviceScene()
+        var onAngle: ((HingeAngle) -> Void)?
+        given(unfolded).start(onFrame: .any).willReturn()
+        given(cover).start(onFrame: .any).willReturn()
+        given(hinge).angle().willReturn(HingeAngle(degrees: 130))
+        given(hinge).watch(onAngle: .any).willProduce { onAngle = $0; return watch }
+        given(scene).update(hingeDegrees: .any).willReturn()
+        let heard = LockedPoses()
+        let screen = RenderedFoldable(
+            unfolded: unfolded, cover: cover, hinge: hinge, scene: scene,
+            onPose: { heard.append($0) })
+        try screen.start { _ in }
+
+        onAngle?(HingeAngle(degrees: 42))
+
+        #expect(heard.value == [FoldablePose(hingeDegrees: 42)])
+    }
+
+    @Test func `should let the book and its scene go once the stream ends while someone follows its pose`() throws {
+        // The live 3D socket follows the pose to push the screen's
+        // placement; a listener that held the book to read its pose kept
+        // the book, its scene and the socket alive after every close.
+        let unfolded = MockScreen(), cover = MockScreen()
+        let hinge = MockHinge(), watch = MockHingeWatch()
+        var onAngle: ((HingeAngle) -> Void)?
+        given(unfolded).start(onFrame: .any).willReturn()
+        given(cover).start(onFrame: .any).willReturn()
+        given(unfolded).stop().willReturn()
+        given(cover).stop().willReturn()
+        given(hinge).angle().willReturn(HingeAngle(degrees: 130))
+        given(hinge).watch(onAngle: .any).willProduce { onAngle = $0; return watch }
+        given(watch).cancel().willReturn()
+        weak var leftBook: RenderedFoldable?
+        weak var leftScene: MockDeviceScene?
+        let heard = LockedPoses()
+        do {
+            let scene = MockDeviceScene()
+            given(scene).update(hingeDegrees: .any).willReturn()
+            let book = RenderedFoldable(
+                unfolded: unfolded, cover: cover, hinge: hinge, scene: scene,
+                onPose: { [scene] pose in _ = scene; heard.append(pose) })
+            leftBook = book
+            leftScene = scene
+            try book.start { _ in }
+            onAngle?(HingeAngle(degrees: 42))
+            book.stop()
+        }
+        onAngle = nil
+
+        #expect(heard.value == [FoldablePose(hingeDegrees: 42)])
+        #expect(leftBook == nil)
+        #expect(leftScene == nil)
+    }
+
     @Test func `should pose the book at the standing angle before composing any frame`() throws {
         // A scene starts flat; a frame composed before the hinge has
         // spoken would show the book open when it is shut.
@@ -144,6 +201,13 @@ private final class LockedScreens: @unchecked Sendable {
     private var storage: [FoldableScreens] = []
     var value: [FoldableScreens] { lock.withLock { storage } }
     func append(_ screens: FoldableScreens) { lock.withLock { storage.append(screens) } }
+}
+
+private final class LockedPoses: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [FoldablePose] = []
+    var value: [FoldablePose] { lock.withLock { storage } }
+    func append(_ pose: FoldablePose) { lock.withLock { storage.append(pose) } }
 }
 
 private final class LockedLog: @unchecked Sendable {

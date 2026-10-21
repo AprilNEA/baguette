@@ -2844,20 +2844,19 @@ struct Server: Sendable {
             // hinge posing it; taps follow the lit panel as everywhere.
             let unfolded = sim.displays().panel(.secondary)
             let cover = sim.displays().panel(.primary)
-            final class Box: @unchecked Sendable { var book: RenderedFoldable? }
-            let box = Box()
             let book = RenderedFoldable(
                 unfolded: unfolded.screen(), cover: cover.screen(),
                 hinge: sim.hinge(), scene: scene, fps: options.frameMetadata ? options.frameRate : nil,
-                onPose: {
+                onPose: { pose in
                     // The lit screen moved: tell the page where it is.
-                    // Atomic frames carry the placement themselves.
-                    if !options.frameMetadata, let json = screenPlacementJSON(scene, pose: box.book?.pose) {
+                    // Atomic frames carry the placement themselves. The
+                    // pose comes in; holding the book here would keep it,
+                    // the scene and this socket alive after the close.
+                    if !options.frameMetadata, let json = screenPlacementJSON(scene, pose: pose) {
                         Task { try? await outbound.write(.text(json)) }
                     }
                 }
             )
-            box.book = book
             foldable = book
             screen = book
             input = sim.input()
