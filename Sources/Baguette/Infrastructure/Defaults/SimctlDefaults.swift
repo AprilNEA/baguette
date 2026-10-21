@@ -15,6 +15,7 @@ import Foundation
 /// integration-only.
 final class SimctlDefaults: Defaults, @unchecked Sendable {
     private let udid: String
+    private let deviceSetPath: String?
     private let subprocess: any Subprocess
     private let xcrun: URL
     private let answers: URL
@@ -26,12 +27,14 @@ final class SimctlDefaults: Defaults, @unchecked Sendable {
     /// are ordinary host processes, so `kill(pid, 0)` can see them.
     init(
         udid: String,
+        deviceSetPath: String? = nil,
         subprocess: any Subprocess = HostSubprocess(),
         xcrun: URL = URL(fileURLWithPath: "/usr/bin/xcrun"),
         answers: URL = URL(fileURLWithPath: "/tmp"),
         isRunning: @escaping @Sendable (Int32) -> Bool = { kill($0, 0) == 0 || errno == EPERM }
     ) {
         self.udid = udid
+        self.deviceSetPath = deviceSetPath
         self.subprocess = subprocess
         self.xcrun = xcrun
         self.answers = answers
@@ -74,7 +77,8 @@ final class SimctlDefaults: Defaults, @unchecked Sendable {
     }
 
     func groups(of bundleID: String) async throws -> [String] {
-        let (status, output) = try await capture(["simctl", "get_app_container", udid, bundleID, "groups"])
+        let (status, output) = try await capture(
+            ["simctl"] + (deviceSetPath.map { ["--set", $0] } ?? []) + ["get_app_container", udid, bundleID, "groups"])
         switch status {
         case 0: return PreferenceSuite.groups(inListing: String(decoding: output, as: UTF8.self))
         case 2: throw DefaultsError.appNotInstalled(bundleID: bundleID)
@@ -88,7 +92,7 @@ final class SimctlDefaults: Defaults, @unchecked Sendable {
     /// codes measured against Xcode 27: 2 = no such app, 149 = shut down.
     /// A suite missing from the app's group listing is `groupNotFound`.
     private func plist(of suite: PreferenceSuite) async throws -> String {
-        let (status, output) = try await capture(suite.containerArguments(udid: udid))
+        let (status, output) = try await capture(suite.containerArguments(udid: udid, deviceSetPath: deviceSetPath))
         switch status {
         case 0: break
         case 2: throw DefaultsError.appNotInstalled(bundleID: suite.bundleID)
@@ -104,7 +108,8 @@ final class SimctlDefaults: Defaults, @unchecked Sendable {
     }
 
     private func defaults(_ arguments: [String]) async throws -> Data {
-        let (status, output) = try await capture(["simctl", "spawn", udid, "defaults"] + arguments)
+        let (status, output) = try await capture(
+            ["simctl"] + (deviceSetPath.map { ["--set", $0] } ?? []) + ["spawn", udid, "defaults"] + arguments)
         guard status == 0 else { throw Self.failure(status) }
         return output
     }

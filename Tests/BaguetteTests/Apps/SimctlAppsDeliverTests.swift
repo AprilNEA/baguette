@@ -19,7 +19,9 @@ struct SimctlAppsDeliverTests {
         addressedTo: "com.example.app"
     )
 
-    private func makeApps(exitCode: Int32 = 0, output: String = "") -> (SimctlApps, Captures) {
+    private func makeApps(
+        exitCode: Int32 = 0, output: String = "", deviceSetPath: String? = nil
+    ) -> (SimctlApps, Captures) {
         let sub = MockSubprocess()
         let captures = Captures()
         given(sub).run(
@@ -30,13 +32,20 @@ struct SimctlAppsDeliverTests {
             if !output.isEmpty { onBytes(Data(output.utf8)) }
             onExit(exitCode)
         }
-        return (SimctlApps(udid: "U", subprocess: sub), captures)
+        return (SimctlApps(udid: "U", deviceSetPath: deviceSetPath, subprocess: sub), captures)
     }
 
     @Test func `should deliver a notification to its app through simctl push`() async throws {
         let (apps, captures) = makeApps()
         try await apps.deliver(note)
         #expect(Array(captures.arguments?.prefix(4) ?? []) == ["simctl", "push", "U", "com.example.app"])
+    }
+
+    @Test func `should deliver a notification inside the device's custom device set when it lives in one`() async throws {
+        let (apps, captures) = makeApps(deviceSetPath: "/custom set")
+        try await apps.deliver(note)
+        #expect(Array(captures.arguments?.prefix(6) ?? [])
+            == ["simctl", "--set", "/custom set", "push", "U", "com.example.app"])
     }
 
     @Test func `should hand simctl the payload exactly as written`() async throws {

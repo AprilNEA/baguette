@@ -162,6 +162,13 @@ struct RemoteNotificationTests {
             == ["simctl", "push", "U", "com.example.app", "/tmp/n.json"])
     }
 
+    @Test func `should hand simctl the device's custom device set when it lives in one`() throws {
+        let note = try RemoteNotification.from(json: order, addressedTo: "com.example.app")
+        #expect(note.deliverArguments(
+            udid: "U", deviceSetPath: "/custom set", payloadFile: URL(fileURLWithPath: "/tmp/n.json"))
+            == ["simctl", "--set", "/custom set", "push", "U", "com.example.app", "/tmp/n.json"])
+    }
+
     @Test func `should be delivered to the apps on the device`() async throws {
         let apps = MockApps()
         given(apps).deliver(.any).willReturn()

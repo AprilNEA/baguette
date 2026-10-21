@@ -46,8 +46,8 @@ public struct PreferenceSuite: Equatable, Sendable {
     /// container the app has, as `<group id>\t<path>` lines. simctl's own
     /// `<group id>` form exits 117 even for a group the app has (Xcode
     /// 27), so the group is picked out of the listing instead.
-    public func containerArguments(udid: String) -> [String] {
-        ["simctl", "get_app_container", udid, bundleID, group == nil ? "data" : "groups"]
+    public func containerArguments(udid: String, deviceSetPath: String? = nil) -> [String] {
+        ["simctl"] + (deviceSetPath.map { ["--set", $0] } ?? []) + ["get_app_container", udid, bundleID, group == nil ? "data" : "groups"]
     }
 
     /// The preferences plist inside the container simctl printed, or
