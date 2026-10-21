@@ -87,6 +87,9 @@ focused farm tile.
 
 ## Gotchas
 
+- **iPhone Duo types through the guest.** Its keys go through
+  `HingeControl` like its hardware keys ([iPhone Duo](../iphone-duo/README.md#gotchas));
+  the first keystroke after a while costs the helper's spawn.
 - **No IME.** Pinyin / Korean / Japanese candidates can't be entered
   through this path.
 - **No emoji or accented characters.** US layout only; `é` / `中` /

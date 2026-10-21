@@ -7,7 +7,7 @@ description: Why iPhone Duo's hinge and hardware keys are driven by a guest-side
 ## Path
 
 - **Drive:** `baguette hinge` / `POST /simulators/<udid>/hinge` / 3D socket `set_pose` → `Hinge.fold(to:over:)` (`HingeMotor`) → `GuestHingeMotor` → `xcrun simctl spawn <udid> <HingeControl> serve` (one per device, kept) → `HIDVirtualEventService` vendor event on an `avpCustom`-shaped service.
-- **Keys:** `baguette press` / `POST …/input` / stream sockets → a foldable's `Input` is `FoldableInput` → `DeviceKeys` (also played by `GuestHingeMotor`) → `HingeControl button <page> <usage> <ms>` on a `mainScreenButtons`-shaped service.
+- **Keys:** `baguette press` / `key` / `type` / `POST …/input` / stream sockets → a foldable's `Input` is `FoldableInput` → `DeviceKeys` (also played by `GuestHingeMotor`) → `HingeControl button <page> <usage> <ms> [<page> <usage>]…` on a `mainScreenButtons`-shaped service.
 - **Read:** `GuestHinge` → `xcrun simctl spawn <udid> <HingeControl> read-angle` (or `watch-angle`) → CoreMotion's `CMAngleManager` in the guest.
 
 ## How the hinge is driven
@@ -50,7 +50,7 @@ per device with `xcrun simctl spawn <udid> <HingeControl> --deadline <t>
 serve` and keeps: it registers a service of the same shape and plays each
 line it is written on stdin (`sweep <from> <to> <ms>` at 60 Hz with Device
 Hub's ease-out, `angle <deg>`, `orientation <native-value>`, `button <page>
-<usage> <ms>`), answering each with `done <status>` once played — 0
+<usage> <ms> [<page> <usage>]…`), answering each with `done <status>` once played — 0
 success, 1 rejected HID dispatch, 2 invalid line. Every hinge, rotation and
 key call waits for that answer, so it returns once the guest has acted and a
 short-lived CLI cannot exit with its command still queued. The encoder
@@ -167,7 +167,16 @@ key (`power`, `lock`, `volume-up`, `volume-down`, `action`) goes to the
 guest, held `duration` seconds or Device Hub's 0.25 s. The CLI, the
 `POST …/input` route and the stream sockets all press through it
 without change; `home` and the edge gestures still take the legacy
-path. Single-panel devices are untouched — `SimulatorKitDisplay` wraps
+path.
+
+Keyboard keys go the same way. The Duo drops Indigo's keyboard
+message (HID page 7) whichever target it names — each panel's
+`0x40000001` / `0x40000003` and the `0x32` slot all ack and type
+nothing — while the same usages on this service type. So
+`FoldableInput.key` presses through `DeviceKeys` too, held 100 ms (the
+panel's tap) unless the caller names a hold. Trailing `<page> <usage>`
+pairs on the `button` line are modifiers: down in order before the key,
+up in reverse after it, and released even when a press is refused. Single-panel devices are untouched — `SimulatorKitDisplay` wraps
 the input only when the device has several panels.
 
 ## Packaging
