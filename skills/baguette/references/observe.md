@@ -2,7 +2,7 @@
 
 Read when: checking the screen after acting, finding an element to tap,
 reading the app's logs, recording a video, or rendering a marketing image.
-Flags are in `commands.md`.
+Flags: that command's `## baguette <cmd>` section of `commands.md`.
 
 ## Screenshot — the default check
 

@@ -3,7 +3,7 @@
 Read when: tapping, dragging, pinching, pressing hardware buttons, typing or
 pasting text, or streaming many gestures. Every coordinate is in **device
 points** with the screen's `width` / `height` alongside (see SKILL.md). The
-full message spec is `wire.md`; flags are in `commands.md`.
+full message spec is `wire.md`; flags: that command's `## baguette <cmd>` section of `commands.md`.
 
 ## Touches
 

@@ -3,7 +3,7 @@
 Read when: testing how an app behaves somewhere else, moving, on a bad
 network, in dark mode or large text, with a camera feed, a push
 notification, a shake, or a staged status bar. None of these are touches;
-most shell out to `simctl` or inject a dylib. Flags are in `commands.md`.
+most shell out to `simctl` or inject a dylib. Flags: that command's `## baguette <cmd>` section of `commands.md`.
 
 **The relaunch rule.** `motion`, `network` and `camera` work by injecting a
 dylib, so only apps launched *after* arming see them. Relaunch with

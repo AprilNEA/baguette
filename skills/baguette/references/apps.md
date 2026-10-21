@@ -1,7 +1,7 @@
 # Apps & data — put apps and their data in place
 
 Read when: installing a build, adding photos or videos, opening a deep link,
-or reading or seeding an app's settings. Flags are in `commands.md`.
+or reading or seeding an app's settings. Flags: that command's `## baguette <cmd>` section of `commands.md`.
 
 ## Install and add media
 

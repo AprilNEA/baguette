@@ -1,8 +1,8 @@
 # Devices — get a simulator ready and know its shape
 
 Read when: no device is booted, taps ack but nothing happens, you need the
-screen size, or the device rotates or folds (iPhone Duo). Flags for every
-command are in `commands.md`.
+screen size, or the device rotates or folds (iPhone Duo). Flags: that command's
+`## baguette <cmd>` section of `commands.md`.
 
 ## Find, boot, shut down
 

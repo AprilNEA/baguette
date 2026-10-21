@@ -1,23 +1,13 @@
 ---
 name: baguette
 description: |
-  Drive iOS simulators programmatically via the `baguette` CLI — taps, swipes,
-  multi-finger gestures, hardware buttons, keyboard text and paste, screenshots,
-  the accessibility tree, logs, and the conditions an app runs under (location,
-  motion, network, dark mode, text size, push notifications, UserDefaults), all
-  without opening Xcode.
-  Use when: (1) an agent needs to drive a booted iOS simulator from a script —
-  tap a coordinate, swipe, type text; (2) building a smoke test, demo, or
-  end-to-end UI flow on a simulator; (3) pairing iOS dev with Claude Code to
-  verify on-screen state after a code change; (4) the user asks to "automate
-  iPhone gestures", "control iOS sim programmatically", or "drive simulator
-  without Xcode"; (5) the user names `baguette`, `baguette input`,
-  `baguette tap`, `baguette serve`, or `baguette stream`; (6) a SwiftUI
-  verification needs to touch the running app, not just inspect static code;
-  (7) a test needs the simulator somewhere, offline, in dark mode, with a push
-  notification or with seeded app settings.
-  Avoid for plain "open the iOS Simulator" / "install Xcode" questions — those
-  are about Xcode itself, not driving a sim.
+  Drive and inspect iOS simulators with the `baguette` CLI: taps, swipes,
+  buttons, typing, screenshots, the accessibility tree, logs, and the
+  conditions an app runs under (location, network, appearance, push,
+  UserDefaults), without Xcode. Use when an agent must act on or verify a
+  running simulator — a UI flow, smoke test or demo, checking a code change on
+  screen — or when the user names `baguette`. Not for installing Xcode or
+  merely opening Simulator.app.
 ---
 
 # baguette — programmatic iOS simulator control
@@ -65,9 +55,12 @@ Read only the reference for the job at hand.
 | set the conditions the app runs under | `references/environment.md` | `location` `motion` `network` `interface` `status-bar` `notify` `shake`, camera |
 | put an app and its data in place | `references/apps.md` | `install` `add-media` `openurl` `schemes` `defaults` |
 
-Two more, generated from the binary by `make docs` (never edit them here):
-`references/commands.md` has every subcommand, flag and exit code;
-`references/wire.md` has every JSON gesture for `input` and the WebSocket.
+Two more, generated from the binary by `make docs` (never edit them here).
+`references/commands.md` has every subcommand, flag and exit code; it's long,
+so read one command's section, not the file:
+`grep -A25 '^## baguette swipe' references/commands.md` (subcommands are
+`### baguette location set`). `references/wire.md` has every JSON gesture for
+`input` and the WebSocket.
 
 ## One-shot or streamed
 
