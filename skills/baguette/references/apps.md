@@ -1,7 +1,7 @@
 # Apps & data — put apps and their data in place
 
-Read when: installing a build, adding photos or videos, opening a deep link,
-or reading or seeding an app's settings. Flags: that command's `## baguette <cmd>` section of `commands.md`.
+Read when: installing a build, launching or relaunching it, adding photos or
+videos, opening a deep link, or reading or seeding an app's settings. Flags: that command's `## baguette <cmd>` section of `commands.md`.
 
 ## Install and add media
 
@@ -14,6 +14,19 @@ During `serve`, `POST /simulators/<X>/files?name=<file>` takes the raw bytes
 and routes by extension (app → install, a `.zip` holding one `.app` →
 extract and install, media → Photos); anything else is `415`. See
 [file upload](https://github.com/tddworks/baguette/blob/main/docs/features/file-upload/README.md).
+
+## Launch and relaunch
+
+baguette has no launch verb; use `simctl`:
+
+```bash
+xcrun simctl launch <X> com.example.app                                 # start it
+xcrun simctl launch --terminate-running-process <X> com.example.app     # restart it
+```
+
+Write settings (below) before the first launch and the app starts from
+them; no relaunch flag is needed. Give it a moment to draw before
+`describe-ui` or a tap: input during the launch animation can miss.
 
 ## Deep links
 

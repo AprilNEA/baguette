@@ -53,7 +53,7 @@ Read only the reference for the job at hand.
 | act like a user: touch, drag, press buttons, type, paste | `references/interact.md` | `tap` `double-tap` `swipe` `pinch` `pan` `input` `press` `type` `key` `paste` `clipboard` |
 | check what happened: see it, find an element, read logs, record | `references/observe.md` | `screenshot` `describe-ui` `logs` `record` `stream` `render-3d` |
 | set the conditions the app runs under | `references/environment.md` | `location` `motion` `network` `interface` `status-bar` `notify` `shake`, camera |
-| put an app and its data in place | `references/apps.md` | `install` `add-media` `openurl` `schemes` `defaults` |
+| put an app and its data in place, launch it | `references/apps.md` | `install` `add-media` `openurl` `schemes` `defaults`, `simctl launch` |
 
 Two more, generated from the binary by `make docs` (never edit them here).
 `references/commands.md` has every subcommand, flag and exit code; it's long,
