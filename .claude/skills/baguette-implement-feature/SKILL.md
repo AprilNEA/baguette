@@ -185,9 +185,10 @@ Patterns that already exist — match them:
       }
   }
   ```
-- **Gesture protocol** — wire DTO with `static let wireType` + `static
-  func parse` + `func execute(on input: any Input)`. The body of
-  `execute` should be one line that delegates to a rich-domain method.
+- **Gesture protocol** — a domain value (a tap, a press) that parses
+  itself from the wire: `static let wireType` + `static func parse` +
+  `func execute(on input: any Input)`. The body of `execute` should be
+  one line that delegates to a rich-domain method.
 - **Field extractors** — use `Field.requiredString` / `requiredDouble`
   / `optionalDouble`. Don't open-code `dict["…"] as? Double`.
 

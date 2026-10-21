@@ -9,7 +9,7 @@ Its patterns, each below:
 2. **A law lives on the node that holds its data**: callers ask, never decide.
 3. **Rich values own their behaviour**, so the adapter stays a wire emitter.
 4. **Every state is a case; invalid input never constructs.**
-5. **Wire DTOs are one line deep**: `parse` then `execute(on:)`.
+5. **A gesture parses itself and acts in one line**: `parse` then `execute(on:)`.
 6. **A Domain decorator may wrap a role** when it owns a rule.
 
 Every `@Mockable protocol` is named for its domain role (`Input`, `Screen`,
@@ -145,10 +145,11 @@ LocationRoute(waypoints: [one], …)              // nil: a route needs two poin
 try HingeCommand.parse(pose: "ajar", angle: nil, duration: nil)   // throws HingeCommandError
 ```
 
-## 5. Wire DTOs are one line deep
+## 5. A gesture parses itself and acts in one line
 
-Gestures (and every other wire envelope) parse, then delegate to the rich
-value. They are the envelope, not where domain logic lives.
+baguette has no DTOs: a `Tap` or a `Press` *is* the domain concept, and it
+reads itself from the wire (`parse`) and acts on the role (`execute(on:)`).
+Its rules live on the rich value it carries, so `execute` stays one line.
 
 ```swift
 struct Press: Gesture, Equatable {
