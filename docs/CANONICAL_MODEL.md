@@ -21,11 +21,10 @@ description: The normative domain model baguette binds to — the tree from Simu
 | **◇** | a value — it answers, and cannot be told anything |
 | **DERIVED** | computed from other nodes, never stored |
 
-**The words are the ones the user types and sees**: the CLI verbs and flags
-(`tap`, `hinge --pose open`, `defaults write --relaunch-if-needed`), the wire
-`type`s (`touch1-down`, `paste`), the page's cards (*Defaults*, *Network*,
-*Location*), and Apple's own where we have none (*cover*, *unfolded panel*,
-*Device Hub*). An abstraction is named for the role it plays — `Input`,
+**The words are the ones the user types and sees**: the CLI verbs and flags,
+the wire `type` names, the page's cards (*Defaults*, *Network*, *Location*),
+and Apple's own where we have none (*cover*, *unfolded panel*, *Device Hub*).
+Their exact syntax is in [commands.md](commands.md) and [wire.md](wire.md). An abstraction is named for the role it plays — `Input`,
 `Screen`, `Hinge`, `Subprocess` — never for a pattern (`Port`, `Service`,
 `Manager`, `Repository`); aggregate persistence takes the plural (`Simulators`,
 `Chromes`). See [AGENTS.md](../AGENTS.md#naming-the-abstractions).

@@ -217,8 +217,9 @@ it's a `struct` or an `enum`:
 
 Domain **values** fail all four (`DeviceButton`, `KeyboardKey`, `HIDUsage`,
 the gestures, `HingeAngle`, `DeviceChrome`) and stay structs and enums:
-`Sendable` and `==` come free, mutation is visible (`mutating`, `var`), and
-there's no subclassing temptation. Before reaching for `final class` on a
+declare `Equatable` and the compiler writes `==`; `Sendable` is checked from
+the stored properties instead of `@unchecked`; mutation is visible
+(`mutating`, `var`); and there's no subclassing temptation. Before reaching for `final class` on a
 domain type, name the resource, the second owner, the `===` test, or the
 state that changes across calls. If you can't, it's a struct.
 

@@ -92,5 +92,6 @@ have worked. Asking the questions of the types it touches finds the shape:
 - Fix what these questions find **in the types the change touches**, test
   first. Leave the rest as a row in CANONICAL §6 for its own change.
 - A new aggregate, a moved law or a changed owner is a design change: write it
-  into CANONICAL_MODEL.md (and the feature's `design.md`) first, and get it
-  approved in Phase 0 before code.
+  into CANONICAL_MODEL.md first, and get it approved in Phase 0 before code.
+  The feature's `design.md` changes only when the change brings research with
+  it (a private API, a measured constant) that the code can't explain.
