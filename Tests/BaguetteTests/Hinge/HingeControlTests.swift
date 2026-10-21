@@ -62,6 +62,49 @@ struct HingeControlTests {
         """)
     }
 
+    /// `button <page> <usage> <ms> [<page> <usage>]…` — trailing pairs are
+    /// modifiers, down before the key and up after it in reverse, so a
+    /// shifted letter or a Cmd chord types as on a hardware keyboard.
+    @Test func `should hold a key's modifiers down around it and release them in reverse`() throws {
+        try Self.run(compiling: """
+        #import "HingeProtocol.h"
+        #include <assert.h>
+        int main(void) {
+          @autoreleasepool {
+            NSMutableArray<NSString *> *events = [NSMutableArray array];
+            __block BOOL refuseDown = NO;
+            BOOL (^key)(unsigned, unsigned, BOOL) = ^BOOL(unsigned page, unsigned usage, BOOL down) {
+              [events addObject:[NSString stringWithFormat:@"%@ %u %u", down ? @"down" : @"up", page, usage]];
+              return !(down && refuseDown && usage == 4);
+            };
+            void (^hold)(unsigned) = ^(unsigned ms) { [events addObject:[NSString stringWithFormat:@"hold %u", ms]]; };
+
+            assert(dispatchHingeButton(@[@"12", @"233", @"250"], key, hold) == 0);
+            assert([events isEqualToArray:(@[@"down 12 233", @"hold 250", @"up 12 233"])]);
+
+            [events removeAllObjects];
+            assert(dispatchHingeButton(@[@"7", @"4", @"100", @"7", @"225", @"7", @"227"], key, hold) == 0);
+            assert([events isEqualToArray:(@[
+              @"down 7 225", @"down 7 227", @"down 7 4", @"hold 100", @"up 7 4", @"up 7 227", @"up 7 225"])]);
+
+            // A refused key still releases everything it pressed.
+            [events removeAllObjects];
+            refuseDown = YES;
+            assert(dispatchHingeButton(@[@"7", @"4", @"100", @"7", @"225"], key, hold) == 1);
+            assert([events.lastObject isEqualToString:@"up 7 225"]);
+
+            refuseDown = NO;
+            [events removeAllObjects];
+            for (NSArray *bad in @[@[], @[@"7", @"4"], @[@"7", @"4", @"100", @"7"], @[@"x", @"4", @"100"]]) {
+              assert(dispatchHingeButton(bad, key, hold) == 2);
+            }
+            assert(events.count == 0);
+          }
+          return 0;
+        }
+        """)
+    }
+
     /// `read-angle` and `watch-angle` print each valid sample the guest's
     /// CoreMotion reports as `angle <degrees>`; an invalid one is no reading.
     @Test func `should report each valid hinge sample to the host as an angle line`() throws {

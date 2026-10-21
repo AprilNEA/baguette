@@ -12,4 +12,9 @@ protocol DeviceKeys: Sendable {
     /// Press `usage` for `hold` seconds. Throws when the guest tool is
     /// missing or refused.
     func press(_ usage: HIDUsage, hold: TimeInterval) throws
+
+    /// Press `usage` for `hold` seconds with `modifiers` held around it,
+    /// down in order before it and up in reverse after. iPhone Duo takes
+    /// keyboard keys only from here, like its hardware keys.
+    func press(_ usage: HIDUsage, holding modifiers: [HIDUsage], hold: TimeInterval) throws
 }
