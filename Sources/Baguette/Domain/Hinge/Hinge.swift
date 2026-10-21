@@ -30,6 +30,12 @@ protocol Hinge: Sendable {
     func fold(to degrees: Double, over duration: TimeInterval) throws
 }
 
+extension Hinge {
+    /// The panel this hinge lights: no reading means as booted, folded,
+    /// so the cover. The one place that rule lives.
+    var litPanel: IntegratedPanel { angle()?.litPanel ?? .primary }
+}
+
 /// A running watch on a hinge; `cancel` stops the samples.
 @Mockable
 protocol HingeWatch: Sendable {

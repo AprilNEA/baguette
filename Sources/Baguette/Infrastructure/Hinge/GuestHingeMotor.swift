@@ -89,8 +89,10 @@ final class GuestHingeMotor: HingeMotor, DeviceKeys, @unchecked Sendable {
         try send("sweep \(Self.number(from)) \(Self.number(to)) \(Self.number(duration * 1000))", playing: duration)
     }
 
-    func press(_ usage: HIDUsage, hold: TimeInterval) throws {
-        try send("button \(usage.page) \(usage.usage) \(Self.number(hold * 1000))", playing: hold)
+    /// Modifiers ride the same line as trailing `<page> <usage>` pairs.
+    func press(_ usage: HIDUsage, holding modifiers: [HIDUsage], hold: TimeInterval) throws {
+        let held = modifiers.map { " \($0.page) \($0.usage)" }.joined()
+        try send("button \(usage.page) \(usage.usage) \(Self.number(hold * 1000))\(held)", playing: hold)
     }
 
     func turn(to orientation: DeviceOrientation) throws {

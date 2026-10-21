@@ -48,7 +48,7 @@ final class SimulatorKitDisplay: Display, @unchecked Sendable {
             screens: screens
         )
         let litPanel: IntegratedPanel = pinnedPanel
-            ?? (IntegratedPanels.several(in: sized) ? (hinge.angle()?.litPanel ?? .primary) : .primary)
+            ?? (IntegratedPanels.several(in: sized) ? hinge.litPanel : .primary)
         let binding = try ConnectedScreens.binding(kind: kind, ports: ports, litPanel: litPanel)
         lock.lock()
         cached = binding

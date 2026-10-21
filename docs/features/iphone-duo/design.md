@@ -119,8 +119,9 @@ guest down.
 
 ## Hardware keys: through `dtuhidd`, not Indigo
 
-The Duo ignores the legacy Indigo button press; its keys go through
-`dtuhidd`'s `mainScreenButtons` service instead, pressed by `HingeControl`.
+The Duo ignores the legacy Indigo button press and Indigo's keyboard
+message alike; its hardware keys and keyboard keys go through `dtuhidd`'s
+`mainScreenButtons` service instead, pressed by `HingeControl`.
 The measured usages and the routing (`FoldableInput` → `DeviceKeys`) are in
 [hinge/design.md](../hinge/design.md#the-hardware-keys-go-the-same-way).
 

@@ -33,7 +33,8 @@
 //   HingeControl angle <degrees>
 //   HingeControl sweep <from> <to> <milliseconds>     (60 Hz, ease-out)
 //   HingeControl orientation <portrait|pud|landscape-left|landscape-right>
-//   HingeControl button <usagePage> <usage> <milliseconds>
+//   HingeControl button <usagePage> <usage> <milliseconds> [<usagePage> <usage>]…
+//                             — trailing pairs are modifiers held around the key
 //   HingeControl serve        — the same verbs, one per line on stdin,
 //                               until EOF, each answered `done <status>`;
 //                               baguette keeps one of these per device so
@@ -133,7 +134,7 @@ int main(int argc, char **argv) {
       }
       first = 3;
     }
-    if (argc - first < 1) { fprintf(stderr, "usage: HingeControl frontmost | read-angle | watch-angle | [--deadline <unix-seconds>] angle <deg> | sweep <from> <to> <ms> | orientation <portrait|pud|landscape-left|landscape-right> | button <page> <usage> <ms> | serve\n"); return 2; }
+    if (argc - first < 1) { fprintf(stderr, "usage: HingeControl frontmost | read-angle | watch-angle | [--deadline <unix-seconds>] angle <deg> | sweep <from> <to> <ms> | orientation <portrait|pud|landscape-left|landscape-right> | button <page> <usage> <ms> [<page> <usage>]... | serve\n"); return 2; }
     if (strcmp(argv[first], "orientation") == 0 &&
         (argc - first != 2 || !isHingeOrientation(@(argv[first + 1])))) {
       fprintf(stderr, "orientation requires portrait, pud, landscape-left or landscape-right\n");
@@ -183,17 +184,15 @@ int main(int argc, char **argv) {
     }
 
     BOOL (*dispatch)(id, SEL, id) = (BOOL (*)(id, SEL, id))objc_msgSend;
-    // One key, down then up, as Device Hub's buttons press it.
-    BOOL (^press)(unsigned, unsigned, unsigned) = ^BOOL(unsigned page, unsigned usage, unsigned ms) {
-      IOHIDEventRef down = IOHIDEventCreateKeyboardEvent(kCFAllocatorDefault, mach_absolute_time(), page, usage, true, 0);
-      BOOL downOK = dispatch(buttons, sel_registerName("dispatchEvent:"), (__bridge id)down);
-      CFRelease(down);
-      usleep(ms * 1000);
-      IOHIDEventRef up = IOHIDEventCreateKeyboardEvent(kCFAllocatorDefault, mach_absolute_time(), page, usage, false, 0);
-      BOOL upOK = dispatch(buttons, sel_registerName("dispatchEvent:"), (__bridge id)up);
-      CFRelease(up);
-      return downOK && upOK;
+    // One key event on the buttons service, as Device Hub's buttons press
+    // it; iPhone Duo takes keyboard keys only from here as well.
+    BOOL (^key)(unsigned, unsigned, BOOL) = ^BOOL(unsigned page, unsigned usage, BOOL down) {
+      IOHIDEventRef event = IOHIDEventCreateKeyboardEvent(kCFAllocatorDefault, mach_absolute_time(), page, usage, down, 0);
+      BOOL ok = dispatch(buttons, sel_registerName("dispatchEvent:"), (__bridge id)event);
+      CFRelease(event);
+      return ok;
     };
+    void (^hold)(unsigned) = ^(unsigned ms) { usleep(ms * 1000); };
     BOOL (^send)(NSData *) = ^BOOL(NSData *payload) {
       IOHIDEventRef ev = IOHIDEventCreateVendorDefinedEvent(kCFAllocatorDefault, mach_absolute_time(), 0xFF61, 0x5B, 0,
         (uint8_t *)payload.bytes, payload.length, 0);
@@ -201,7 +200,7 @@ int main(int argc, char **argv) {
       CFRelease(ev);
       return ok;
     };
-    // One command: `angle D`, `sweep F T MS`, `orientation NAME` or `button P U MS`.
+    // One command: `angle D`, `sweep F T MS`, `orientation NAME` or `button P U MS [P U]…`.
     // Exit status: 0 success, 1 dispatch failure, 2 invalid arguments.
     int (^perform)(NSArray<NSString *> *) = ^int(NSArray<NSString *> *words) {
       NSString *verb = words.firstObject ?: @"";
@@ -219,9 +218,8 @@ int main(int argc, char **argv) {
         return dispatchHingeOrientation(words[1], ^BOOL(const char *value) {
           return send(orientationPayload(value));
         });
-      } else if ([verb isEqualToString:@"button"] && words.count >= 4) {
-        return press((unsigned)strtoul(words[1].UTF8String, NULL, 0), (unsigned)strtoul(words[2].UTF8String, NULL, 0),
-              (unsigned)strtoul(words[3].UTF8String, NULL, 0)) ? 0 : 1;
+      } else if ([verb isEqualToString:@"button"]) {
+        return dispatchHingeButton([words subarrayWithRange:NSMakeRange(1, words.count - 1)], key, hold);
       } else {
         return 2;
       }

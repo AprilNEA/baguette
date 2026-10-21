@@ -223,7 +223,16 @@ extension Simulator {
         guard chromes.panels(forDeviceName: deviceTypeName).contains(.secondary) else {
             return .primary
         }
-        return hinge().angle()?.litPanel ?? .primary
+        return hinge().litPanel
+    }
+
+    /// Input for a foldable's live page, whose socket outlives a fold:
+    /// each gesture goes to the panel the hinge lights when it starts.
+    func litPanelInput() -> any Input {
+        LitPanelInput(
+            cover: displays().panel(.primary).input(),
+            unfolded: displays().panel(.secondary).input(),
+            hinge: hinge())
     }
 
     /// Resolve the installed 3D model for this simulator. Device type
