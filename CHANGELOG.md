@@ -12,7 +12,7 @@ For releases prior to this changelog, see the
 
 ### Fixed
 - iPhone Duo types: `type`, `key` and the page's keyboard press keys through the guest, as its hardware keys already do, instead of a keyboard message the Duo drops on either panel. → [docs](docs/features/iphone-duo/README.md)
-- On iPhone Duo's page, taps, drags and typing follow the lit panel after a fold instead of landing on the panel that went dark; a drag stays on the panel it started on. → [docs](docs/features/iphone-duo/README.md)
+- On iPhone Duo's page, taps, drags and typing follow the lit panel after a fold instead of landing on the panel that went dark. → [docs](docs/features/iphone-duo/README.md)
 - `--device-set` now reaches every `simctl` call, so shake, status bar, location, appearance, clipboard, logs, apps, deep links, `notify`, photos, defaults, motion, network, camera and `heal` work on a device in a custom set instead of failing with `Invalid device`. ([#122](https://github.com/tddworks/baguette/pull/122))
 - `serve`'s live 3D stream (`/simulators/:udid/stream.3d.avcc` and `.mjpeg`) frees its memory when the socket closes and loads each device model once, so `serve` no longer grows with every connection (by up to 30 MB for iPhone Duo). → [docs](docs/features/3d-rendering/design.md) ([#123](https://github.com/tddworks/baguette/pull/123))
 

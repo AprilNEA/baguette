@@ -31,7 +31,7 @@ struct FoldableInput: Input {
             return touches.button(button, duration: duration)
         }
         do {
-            try keys.press(key, hold: duration > 0 ? duration : Self.hold)
+            try keys.press(key, holding: [], hold: duration > 0 ? duration : Self.hold)
             return true
         } catch {
             log("[keys] press \(button.rawValue) failed: \(error)")

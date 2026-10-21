@@ -5,8 +5,7 @@ import Mockable
 
 /// iPhone Duo's page keeps one socket across a fold: the book draws both
 /// panels, so nothing reconnects when the hinge lights the other one.
-/// Its input follows the lit panel gesture by gesture, and a finger
-/// stays on the panel it touched down on until it lifts.
+/// Its input follows the lit panel gesture by gesture.
 @Suite("LitPanelInput")
 struct LitPanelInputTests {
 
@@ -19,7 +18,6 @@ struct LitPanelInputTests {
         let unfolded = MockInput()
         for panel in [cover, unfolded] {
             given(panel).tap(at: .any, size: .any, duration: .any, edge: .any).willReturn(true)
-            given(panel).touch1(phase: .any, at: .any, size: .any, edge: .any).willReturn(true)
             given(panel).key(.any, modifiers: .any, duration: .any).willReturn(true)
         }
         let hinge = Hinge()
@@ -54,28 +52,5 @@ struct LitPanelInputTests {
         #expect(input.key(a, modifiers: [], duration: 0))
         verify(unfolded).key(.any, modifiers: .any, duration: .any).called(1)
         verify(cover).key(.any, modifiers: .any, duration: .any).called(1)
-    }
-
-    @Test func `should keep a drag on the panel it started on when the device folds mid-drag`() {
-        let (input, cover, unfolded, hinge) = make()
-        hinge.lit = .secondary
-        #expect(input.touch1(phase: .down, at: point, size: size, edge: nil))
-        hinge.lit = .primary
-        #expect(input.touch1(phase: .move, at: point, size: size, edge: nil))
-        #expect(input.touch1(phase: .up, at: point, size: size, edge: nil))
-        verify(unfolded).touch1(phase: .any, at: .any, size: .any, edge: .any).called(3)
-        verify(cover).touch1(phase: .any, at: .any, size: .any, edge: .any).called(0)
-    }
-
-    @Test func `should start the next drag on the newly lit panel when the finger has lifted`() {
-        let (input, cover, unfolded, hinge) = make()
-        hinge.lit = .secondary
-        _ = input.touch1(phase: .down, at: point, size: size, edge: nil)
-        _ = input.touch1(phase: .up, at: point, size: size, edge: nil)
-        hinge.lit = .primary
-        #expect(input.touch1(phase: .down, at: point, size: size, edge: nil))
-        #expect(input.touch1(phase: .move, at: point, size: size, edge: nil))
-        verify(unfolded).touch1(phase: .any, at: .any, size: .any, edge: .any).called(2)
-        verify(cover).touch1(phase: .any, at: .any, size: .any, edge: .any).called(2)
     }
 }

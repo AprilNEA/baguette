@@ -1,47 +1,15 @@
 import Foundation
 
 /// A foldable's input across folds: each gesture goes to the panel the
-/// hinge lights when it starts. iPhone Duo's page keeps one socket while
-/// the hinge moves (the book draws both panels), so an input bound once
-/// would keep addressing a panel that has gone dark.
-///
-/// A finger stays on the panel it touched down on until it lifts: a
-/// `down` on one panel and an `up` on the other would leave the first
-/// one holding a contact nobody releases.
-final class LitPanelInput: Input, @unchecked Sendable {
-    private let cover: any Input
-    private let unfolded: any Input
-    private let litPanel: @Sendable () -> IntegratedPanel
-    private let lock = NSLock()
-    private var touching: IntegratedPanel?
+/// hinge lights. iPhone Duo's page keeps one socket while the hinge
+/// moves (the book draws both panels), so an input bound once would
+/// keep addressing a panel that has gone dark.
+struct LitPanelInput: Input {
+    let cover: any Input
+    let unfolded: any Input
+    let litPanel: @Sendable () -> IntegratedPanel
 
-    init(cover: any Input, unfolded: any Input, litPanel: @escaping @Sendable () -> IntegratedPanel) {
-        self.cover = cover
-        self.unfolded = unfolded
-        self.litPanel = litPanel
-    }
-
-    private func panel(_ panel: IntegratedPanel) -> any Input {
-        panel == .primary ? cover : unfolded
-    }
-
-    private var lit: any Input { panel(litPanel()) }
-
-    /// The panel a contact's phase goes to: chosen on `down`, kept
-    /// until `up`. A move with no contact down follows the hinge.
-    private func contact(_ phase: GesturePhase) -> any Input {
-        lock.lock()
-        defer { lock.unlock() }
-        let chosen: IntegratedPanel
-        if phase == .down || touching == nil {
-            chosen = litPanel()
-            touching = chosen
-        } else {
-            chosen = touching ?? litPanel()
-        }
-        if phase == .up { touching = nil }
-        return panel(chosen)
-    }
+    private var lit: any Input { litPanel() == .primary ? cover : unfolded }
 
     func tap(at point: Point, size: Size, duration: Double, edge: DeviceEdge?) -> Bool {
         lit.tap(at: point, size: size, duration: duration, edge: edge)
@@ -52,11 +20,11 @@ final class LitPanelInput: Input, @unchecked Sendable {
     }
 
     func touch1(phase: GesturePhase, at point: Point, size: Size, edge: DeviceEdge?) -> Bool {
-        contact(phase).touch1(phase: phase, at: point, size: size, edge: edge)
+        lit.touch1(phase: phase, at: point, size: size, edge: edge)
     }
 
     func touch2(phase: GesturePhase, first: Point, second: Point, size: Size) -> Bool {
-        contact(phase).touch2(phase: phase, first: first, second: second, size: size)
+        lit.touch2(phase: phase, first: first, second: second, size: size)
     }
 
     func button(_ button: DeviceButton, duration: Double) -> Bool {

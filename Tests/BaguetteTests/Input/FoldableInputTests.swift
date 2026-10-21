@@ -11,21 +11,16 @@ import Mockable
 struct FoldableInputTests {
 
     final class Presses: @unchecked Sendable {
-        var keys: [(HIDUsage, TimeInterval)] = []
-        var chords: [(HIDUsage, [HIDUsage], TimeInterval)] = []
+        var keys: [(HIDUsage, [HIDUsage], TimeInterval)] = []
     }
 
     private func make(refusing: Bool = false) -> (FoldableInput, MockInput, Presses) {
         let touches = MockInput()
         let keys = MockDeviceKeys()
         let presses = Presses()
-        given(keys).press(.any, hold: .any).willProduce { usage, hold in
-            if refusing { throw HingeError.toolMissing }
-            presses.keys.append((usage, hold))
-        }
         given(keys).press(.any, holding: .any, hold: .any).willProduce { usage, modifiers, hold in
             if refusing { throw HingeError.toolMissing }
-            presses.chords.append((usage, modifiers, hold))
+            presses.keys.append((usage, modifiers, hold))
         }
         return (FoldableInput(touches: touches, keys: keys), touches, presses)
     }
@@ -43,7 +38,7 @@ struct FoldableInputTests {
             HIDUsage(page: 0xFF00, usage: 0x66),
         ])
         // Device Hub holds a key a quarter second; a longer hold is the caller's.
-        #expect(presses.keys.map(\.1) == [0.25, 0.25, 0.25, 0.25, 2])
+        #expect(presses.keys.map(\.2) == [0.25, 0.25, 0.25, 0.25, 2])
     }
 
     @Test func `should send touches and keyless buttons to the panel on a foldable`() {
@@ -66,13 +61,13 @@ struct FoldableInputTests {
         let a = KeyboardKey.from(wireCode: "KeyA")!
         #expect(input.key(a, modifiers: [.command, .shift], duration: 0))
         #expect(input.key(a, modifiers: [], duration: 0.5))
-        #expect(presses.chords.map(\.0) == [HIDUsage(page: 7, usage: 4), HIDUsage(page: 7, usage: 4)])
+        #expect(presses.keys.map(\.0) == [HIDUsage(page: 7, usage: 4), HIDUsage(page: 7, usage: 4)])
         // Held in a fixed order, so a chord always presses the same way.
-        #expect(presses.chords.map(\.1) == [
+        #expect(presses.keys.map(\.1) == [
             [HIDUsage(page: 7, usage: 0xE3), HIDUsage(page: 7, usage: 0xE1)], [],
         ])
         // A keystroke's default hold is the panel's 100 ms tap.
-        #expect(presses.chords.map(\.2) == [0.1, 0.5])
+        #expect(presses.keys.map(\.2) == [0.1, 0.5])
         verify(touches).key(.any, modifiers: .any, duration: .any).called(0)
     }
 
