@@ -5,14 +5,14 @@
       "id": 1,
       "name": "settings-airplane-mode-script",
       "prompt": "Write me a shell script that uses the baguette CLI to: (a) find a booted iPhone simulator, (b) press Home, (c) tap the Settings app icon on the home screen, (d) wait for Settings to open, (e) capture a single JPEG frame proving Settings is on screen, and save it to /tmp/settings.jpg. Assume baguette is installed and at least one iPhone is booted. Be concrete with the actual commands and the wire-format JSON the script needs. Inline any tap coordinates with comments explaining how you derived them.",
-      "expected_output": "A bash script that uses `baguette list --json` to pick a UDID, `baguette chrome layout` to get the screen size in points, `baguette press --button home`, `baguette tap` with width/height passed in (NOT normalized 0-1 coords), and `baguette screenshot --output /tmp/settings.jpg` for the proof. Better still if it finds the Settings icon with `baguette describe-ui` and taps its frame's centre. Should NOT cut frames out of `baguette stream`, and should NOT propose `baguette key` or `baguette type`.",
+      "expected_output": "A bash script that uses `baguette list --json` to pick a UDID, `baguette describe-ui` to get the screen size in points (its outer `screen`), `baguette press --button home`, `baguette tap` with width/height passed in (NOT normalized 0-1 coords), and `baguette screenshot --output /tmp/settings.jpg` for the proof. Better still if it finds the Settings icon with `baguette describe-ui` and taps its frame's centre. Should NOT cut frames out of `baguette stream`, and should NOT propose `baguette key` or `baguette type`.",
       "files": []
     },
     {
       "id": 2,
       "name": "maps-pinch-stream",
       "prompt": "I need to stream a series of gestures to a long-running baguette session: open Maps, then perform a smooth two-finger pinch-to-zoom-in on the centre of the screen, then pan north by 200 points. The simulator is an iPhone 17 Pro Max (UDID: AAAA-BBBB-CCCC-DDDD). Generate the exact newline-delimited JSON I should pipe into `baguette input --udid AAAA-BBBB-CCCC-DDDD`, including any home/launch steps. Explain why you're using `touch2-*` vs `touch1-*` for the pinch.",
-      "expected_output": "Newline-delimited JSON using `touch2-down/move/up` (NOT touch1) for the pinch, with x1/y1/x2/y2 in device points based on iPhone 17 Pro Max screen 438x954, and width/height fields on every gesture. Should explain that single-finger streaming routes correctly but iOS treats it as a pan, not a pinch — so two-finger is required for UIPinchGestureRecognizer.",
+      "expected_output": "Newline-delimited JSON using `touch2-down/move/up` (NOT touch1) for the pinch, with x1/y1/x2/y2 in device points, width/height on every gesture taken from `describe-ui`'s outer `screen` (438x954 is the doc's iPhone 17 Pro Max example; a live read wins). Should explain that single-finger streaming routes correctly but iOS treats it as a pan, not a pinch — so two-finger is required for UIPinchGestureRecognizer.",
       "files": []
     },
     {
@@ -40,7 +40,7 @@
       "id": 6,
       "name": "tap-button-by-label",
       "prompt": "On the booted simulator (UDID 3333-4444) my app shows a button labelled \"Sign In\" but I don't know where it is on screen. Use baguette to tap it.",
-      "expected_output": "Runs `baguette describe-ui --udid 3333-4444`, finds the node whose label is \"Sign In\", and taps the centre of its frame (x + width/2, y + height/2) with `baguette tap`, passing the screen width/height from `chrome layout` (device points, same units as the frame). Should NOT guess coordinates from a screenshot alone.",
+      "expected_output": "Runs `baguette describe-ui --udid 3333-4444`, finds the node whose label is \"Sign In\", and taps the centre of its frame (x + width/2, y + height/2) with `baguette tap`, passing `describe-ui`'s outer `screen` width/height (device points, same units as the frame). Should NOT guess coordinates from a screenshot alone.",
       "files": []
     },
     {
@@ -61,7 +61,7 @@
       "id": 9,
       "name": "duo-unfolded-tap",
       "prompt": "On an iPhone Duo simulator (UDID 9999-0000), unfold it and tap the centre of the unfolded screen with baguette.",
-      "expected_output": "`baguette hinge --udid 9999-0000 --pose open`, then reads the new size with `baguette chrome layout` (the unfolded panel, not the cover), then `baguette tap` at half of that width/height with those width/height values. Should NOT reuse the folded cover's size or look for a `--display inner` flag.",
+      "expected_output": "`baguette hinge --udid 9999-0000 --pose open`, then reads the new size from `baguette describe-ui`'s `screen` (the unfolded panel, not the cover), then `baguette tap` at half of that width/height with those width/height values. Should NOT reuse the folded cover's size or look for a `--display inner` flag.",
       "files": []
     }
   ]

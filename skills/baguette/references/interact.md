@@ -80,6 +80,7 @@ baguette clipboard copy --udid <X>   # sim pasteboard → host Mac
 ```
 
 On the stream WebSocket / `input`: `{"type":"paste","text":"…"}` (replies
-`paste_result`) and `{"type":"copy","press":false?}` (presses Cmd+C, then
-ferries to the host; replies `copy_result`). See
+`paste_result`) and `{"type":"copy"}` (presses Cmd+C, then ferries to the
+host; replies `copy_result`); `{"type":"copy","press":false}` only ferries,
+no keystroke. See
 [paste](https://github.com/tddworks/baguette/blob/main/docs/features/paste/README.md).

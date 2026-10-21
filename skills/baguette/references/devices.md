@@ -14,6 +14,9 @@ baguette shutdown --udid <UDID>
 baguette lifetime --detach          # keep devices booted when Simulator.app closes
 ```
 
+`lifetime` is Simulator.app's setting: Device Hub ignores it, and quitting
+Device Hub shuts every booted device down.
+
 Every command takes `--device-set <path>` for a device in a custom set.
 
 ## When input acks but lands nowhere: `heal`
@@ -29,12 +32,15 @@ Hub is relaunched. See
 ## The screen's size — needed by every gesture
 
 ```bash
-baguette chrome layout --udid <UDID> | jq '.screen | {width, height}'
+baguette describe-ui --udid <UDID> | jq '.screen | {width, height}'
 # → {"width": 438, "height": 954}
 ```
 
-Those are device points, the units every gesture's `width` / `height` take.
-Read them per device and again after a rotation or a fold; never hardcode.
+The outer `screen` is in device points, the units every gesture's `width` /
+`height` take. Read it per device and again after a rotation or a fold; never
+hardcode. `chrome layout`'s `screen` is where the bezel image puts the screen,
+in the image's units: right for drawing a frame, wrong for a gesture (on iPhone
+Duo's unfolded panel it reads 626 × 890 for a 669 × 951 point screen).
 
 ## Rotate
 
@@ -53,10 +59,10 @@ The hinge decides which is lit, and `tap`, `type`, `screenshot`, `stream`,
 baguette hinge --udid <UDID>                 # read: {"angleDegrees": 130.0}
 baguette hinge --udid <UDID> --pose open     # unfold: open (130°, as Device Hub does) | flat (180°) | closed (0°)
 baguette hinge --udid <UDID> --angle 72      # any angle 0–180
-baguette chrome layout --udid <UDID>         # now the unfolded panel's size
+baguette describe-ui --udid <UDID> | jq .screen   # now the unfolded panel's size
 ```
 
-It boots folded. After a fold, read `chrome layout` again before tapping.
+It boots folded. After a fold, read `describe-ui`'s `screen` again before tapping.
 Exit code `3` means the guest helper timed out: the move may have landed, so
 read the hinge before retrying. Never power a panel off with
 `simctl io … screenConfig`; it crash-loops SpringBoard. See
@@ -64,9 +70,10 @@ read the hinge before retrying. Never power a panel off with
 
 ## CarPlay
 
-`--display carplay` on `input`, `screenshot` and `stream` targets an attached
-CarPlay display; add `--require-existing-display` to fail rather than enable
-one. See
+`baguette input --display carplay` and `baguette screenshot --display carplay`
+target an attached CarPlay display; `input --require-existing-display` fails
+rather than enable one. On the stream WebSocket it's `?display=carplay`, plus
+`&requireExistingDisplay=1`; the `stream` CLI has no `--display`. See
 [companion screens](https://github.com/tddworks/baguette/blob/main/docs/features/companion-screens/README.md).
 
 ## Not wired

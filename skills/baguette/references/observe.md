@@ -13,14 +13,15 @@ baguette screenshot --udid <X> --size appstore-6.9 --output shot.png
 ```
 
 `--scale` is an integer divisor (2 halves each side); `--size` / `--fit` /
-`--background` frame it for a store listing; `--format png|jpg` follows the
-extension. Then `Read` the image. `--metadata-output geom.json` writes the
+`--background` frame it for a store listing; `--format png|jpg` defaults to the
+`--output` extension, else jpg, and an explicit `--format` wins. Then `Read` the image. `--metadata-output geom.json` writes the
 frame's pixel geometry (crop, letterbox) beside it.
 
 SimulatorKit only emits a frame when the screen changes, so an idle device
 can time out (`Failure.timeout`). Nudge it first:
 
 ```bash
+read W H < <(baguette describe-ui --udid <X> | jq -r '.screen | "\(.width) \(.height)"')
 baguette tap --udid <X> --x 1 --y 1 --width "$W" --height "$H"; sleep 0.2
 ```
 

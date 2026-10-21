@@ -48,8 +48,9 @@ baguette defaults import --udid <X> --bundle-id com.example.app --file seed.json
 ```
 
 - `--suite group.…` targets an App Group suite. `--type` is `bool | int |
-  float | string | date | data | plist`; `--json` reads `{"type","value"}`
-  and `present:false` for an absent key.
+  float | string | date | data | plist`. With `--key`, `--json` reads
+  `{"key","present":true,"type","value"}` for a stored key and
+  `{"key","present":false}` for one never stored.
 - **A running app may not see a write.** `--relaunch-if-needed` changes an
   `@AppStorage` key live and relaunches only for keys read once;
   `--relaunch` always relaunches.
@@ -58,5 +59,7 @@ baguette defaults import --udid <X> --bundle-id com.example.app --file seed.json
   (`lookups.unset` in JSON); write them like any key.
 - `export` / `import` save and restore a set of keys for repeatable setup.
 
-HTTP: `GET /simulators/<X>/defaults.json`, `POST|DELETE /simulators/<X>/defaults`.
+HTTP: `GET /simulators/<X>/defaults.json?bundleId=…[&key=…]`,
+`POST /simulators/<X>/defaults` with `{"bundleId","key","type","value"}` in the
+body, `DELETE /simulators/<X>/defaults?bundleId=…&key=…`.
 See [defaults](https://github.com/tddworks/baguette/blob/main/docs/features/defaults/README.md).
