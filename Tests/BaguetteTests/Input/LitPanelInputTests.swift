@@ -10,11 +10,12 @@ import Mockable
 @Suite("LitPanelInput")
 struct LitPanelInputTests {
 
-    final class Hinge: @unchecked Sendable {
+    /// The angle the mock hinge reports; tests fold it by setting `lit`.
+    final class Fold: @unchecked Sendable {
         var lit: IntegratedPanel = .primary
     }
 
-    private func make() -> (LitPanelInput, cover: MockInput, unfolded: MockInput, Hinge) {
+    private func make() -> (LitPanelInput, cover: MockInput, unfolded: MockInput, Fold) {
         let cover = MockInput()
         let unfolded = MockInput()
         for panel in [cover, unfolded] {
@@ -29,9 +30,11 @@ struct LitPanelInputTests {
                 start1: .any, end1: .any, start2: .any, end2: .any, size: .any, duration: .any
             ).willReturn(true)
         }
-        let hinge = Hinge()
-        let input = LitPanelInput(cover: cover, unfolded: unfolded, litPanel: { hinge.lit })
-        return (input, cover, unfolded, hinge)
+        let fold = Fold()
+        let hinge = MockHinge()
+        given(hinge).angle().willProduce { HingeAngle(degrees: fold.lit == .primary ? 0 : 130) }
+        let input = LitPanelInput(cover: cover, unfolded: unfolded, hinge: hinge)
+        return (input, cover, unfolded, fold)
     }
 
     private let size = Size(width: 466, height: 678)

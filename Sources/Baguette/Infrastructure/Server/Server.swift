@@ -2859,13 +2859,9 @@ struct Server: Sendable {
             )
             foldable = book
             screen = book
-            // This socket outlives a fold, so each gesture asks the
-            // hinge which panel is lit; the socket's own watch keeps
-            // that answer cached.
-            let hinge = sim.hinge()
-            input = LitPanelInput(
-                cover: cover.input(), unfolded: unfolded.input(),
-                litPanel: { hinge.angle()?.litPanel ?? .primary })
+            // The socket outlives a fold; its hinge watch keeps the
+            // lit panel each gesture asks for cached.
+            input = sim.litPanelInput()
             refresh = { book.refresh() }
         } else {
             let bound: (screen: any Screen, input: any Input)

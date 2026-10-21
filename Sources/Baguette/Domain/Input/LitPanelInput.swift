@@ -12,26 +12,26 @@ import Foundation
 final class LitPanelInput: Input, @unchecked Sendable {
     private let cover: any Input
     private let unfolded: any Input
-    private let litPanel: @Sendable () -> IntegratedPanel
+    private let hinge: any Hinge
     private let lock = NSLock()
     private var touching: IntegratedPanel?
 
-    init(cover: any Input, unfolded: any Input, litPanel: @escaping @Sendable () -> IntegratedPanel) {
+    init(cover: any Input, unfolded: any Input, hinge: any Hinge) {
         self.cover = cover
         self.unfolded = unfolded
-        self.litPanel = litPanel
+        self.hinge = hinge
     }
 
     private func input(on panel: IntegratedPanel) -> any Input { panel == .primary ? cover : unfolded }
 
-    private var lit: any Input { input(on: litPanel()) }
+    private var lit: any Input { input(on: hinge.litPanel) }
 
     /// The panel a contact's phase goes to: the lit one on `down`, the
     /// same one until `up`.
     private func contact(_ phase: GesturePhase) -> any Input {
         lock.lock()
         defer { lock.unlock() }
-        let panel = (phase == .down ? nil : touching) ?? litPanel()
+        let panel = (phase == .down ? nil : touching) ?? hinge.litPanel
         touching = phase == .up ? nil : panel
         return input(on: panel)
     }
