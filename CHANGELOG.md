@@ -10,6 +10,9 @@ For releases prior to this changelog, see the
 
 ## [Unreleased]
 
+### Added
+- `baguette press --button software-keyboard` toggles the on-screen keyboard for a focused text field. The same button name works over stdin and WebSocket. → [docs](docs/features/keyboard/README.md#software-keyboard)
+
 ---
 
 ## [0.2.10] - 2026-10-21

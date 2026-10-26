@@ -71,6 +71,13 @@ baguette paste --udid <X> --text "café 中文 🦄"                 # any unico
 - Focus the field first (tap it). On iPhone Duo keys go through a helper in
   the guest; the first keystroke after a while costs most of a second.
 
+### Software keyboard
+
+Focus a text field, then run `baguette press --udid <X> --button software-keyboard`
+to toggle the on-screen keyboard. The action does not report keyboard visibility
+or change hardware-keyboard attachment. See
+[Keyboard](https://github.com/tddworks/baguette/blob/main/docs/features/keyboard/README.md#software-keyboard).
+
 ## Clipboard
 
 ```bash
